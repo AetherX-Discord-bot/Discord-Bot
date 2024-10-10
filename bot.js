@@ -1,14 +1,38 @@
 // Import the necessary modules
 require('dotenv').config();
-const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ComponentType } = require('discord.js');
+const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ComponentType, Events, Intents, interactionCreate } = require('discord.js');
 const { DisTube } = require('distube');
 const { YtDlpPlugin } = require('@distube/yt-dlp');
 const { SpotifyPlugin } = require('@distube/spotify');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
+const isTestMode = false; // Change to false when not in test mode
 const afkUsers = new Map();
 const axios = require('axios');
 const he = require('he');
+const fs = require('fs');
+const path = require('path');
+//const { Routes } = require('discord-api-types/v9');
+const clientId = '1067646246254284840';
+const guildId = '1094423468566646894';
+const token = process.env.BOT_TOKEN;
+const rest = new REST({ version: '10' }).setToken(token);
+const dotenv = require('dotenv');
+const EventEmitter = require('events');
+const emitter = new EventEmitter();
+const userColors = {
+    '435125886996709377': '\x1b[32m', //androgalaxi=blue
+    '1286383453016686705': '\x1b[38;5;205m', //Lmutt090=pink
+    // Add more users and colors as needed
+};
+const resetColor = '\x1b[0m'; // Reset color
+
+// Group: DIRECT user Perms
+const allowedUsers = ['435125886996709377', '1286383453016686705'];
+// const trustUsers = ['userid'];
+// const level1allow = [...trustUsers, ...allowedUsers];
+// Group end
+const { SlashCommandBuilder } = require('@discordjs/builders');
 
 // Create a new Discord client with intents to listen for messages
 const client = new Client({
@@ -31,34 +55,55 @@ client.on('error', (error) => {
     console.error('Client error:', error);
 });
 
-// Slash command registration
+//MaxListeners
+emitter.setMaxListeners(30)
+
+/*await rest.put(
+    Routes.applicationCommands(client.user.id),
+    { body: commands }  // This will now include both the 'about' and 'ban' commands
+);*/
+
+// Load environment variables from .env file
+require('dotenv').config(); // Ensure dotenv is required correctly
+
+// Import your command files
+const aboutCommand = require('./commands/about');
+const banCommand = require('./commands/ban');
+const kickCommand = require('./commands/kick');
+const muteCommand = require('./commands/mute');
+const unmuteCommand = require('./commands/unmute');
+const timeoutCommand = require('./commands/timeout')
+
+// Define commands array
 const commands = [
-    {
-        name: 'about',
-        description: 'Provides information about the bot, developer, and invites.'
-    }
+    aboutCommand.data.toJSON(), // Use toJSON for slash command registration
+    banCommand.data.toJSON(),
+    kickCommand.data.toJSON(),
+    muteCommand.data.toJSON(),
+    unmuteCommand.data.toJSON(),
+    timeoutCommand.data.toJSON()
 ];
 
-const rest = new REST({ version: '10' }).setToken('YOUR_BOT_TOKEN');
+// Now, you can use this 'commands' array to register your commands with Discord
 
 // Register the slash commands when the bot is ready
 client.once('ready', async () => {
     try {
-        console.log('Bot is online!');
+        console.log('\x1b[36m%s\x1b[0m', 'Bot is online and ready for war with Discord users!');
 
-        // Register commands globally
+        // Register slash commands globally
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: commands } // Ensure "commands" is defined correctly elsewhere
+            { body: commands }
         );
-
-        // Set the bot's activity (this is basic activity, not full Rich Presence)
-        await client.user.setActivity('with broken commands', { type: 'PLAYING' });
-        console.log('Slash commands registered and bot activity set successfully.');
-        
+        console.log('\x1b[32m%s\x1b[0m', 'Slash commands registered successfully.');
     } catch (error) {
-        console.error('Error during bot setup:', error);
+        console.error('\x1b[31m%s\x1b[0m', 'Error during bot setup:', error);
     }
+    if (isTestMode) {
+        console.warn(`\"You have test mode set to \'true\', set it to \'false\' when you are done testing it!\" -Lucas \（・ω‐\）`);
+    }
+    console.log('\x1b[34m%s\x1b[0m', '\"Make sure to use clear when you\'re done!\" -Lucas \（・ω‐\）');
 });
 
 const distube = new DisTube(client, {
@@ -72,7 +117,7 @@ const distube = new DisTube(client, {
 });
 
 
-// Handle interactionCreate event for slash commands
+// Handle inwarneractionCreate event for slash commands
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isCommand()) return;
 
@@ -84,8 +129,8 @@ client.on('interactionCreate', async (interaction) => {
             .setTitle('AetherX Bot Information')
             .setDescription('AetherX is a custom Discord bot designed by Androgalaxi and lmutt090.\n\nInvite the bot to your server using [this link](https://discord.com/oauth2/authorize?client_id=1067646246254284840&scope=bot&permissions=8) or the link below.')
             .addFields(
-                { name: 'Developer', value: 'Androgalaxi and lmutt090' },
-                { name: 'Bot Version', value: '1.0.0' },
+                { name: 'Developer', value: '[Androgalaxi](https://discord.com/users/435125886996709377) and [lmutt090](https://discord.com/users/1286383453016686705)' },
+                { name: 'Bot Version', value: '0.3' },
                 { name: 'Bot Invite Link', value: '[Invite AetherX](https://discord.com/oauth2/authorize?client_id=1067646246254284840&scope=bot&permissions=8)' },
                 { name: 'Support Server', value: '[Join the Support Server](https://discord.gg/yFY8Fnbtp9)' }
             )
@@ -201,6 +246,31 @@ client.on('messageCreate', async message => {
     }
 });
 
+client.on('messageCreate', async (message) => {
+    if (message.content.startsWith('!log') || message.content.startsWith('Aether,') || message.content.startsWith('Log this:')) {
+        // Check if the user is allowed to log
+        if (!allowedUsers.includes(message.author.id)) {
+            return message.channel.send('You do not have permission to use this command... LOL!!!! btw, this is a dev command...');
+            console.error(`${message.author.username} tried to log`)
+        }
+
+        const args = message.content.split(' ').slice(1).join(' ');
+
+        if (!args) {
+            return message.channel.send('Please provide a message to log.');
+        }
+
+        // Determine the color for the log based on the user
+        const userColor = userColors[message.author.id] || '\x1b[37m'; // Default to white if user not found
+
+        // Log the message to the console with the user's color
+        console.log(`${userColor}[LOG] ${message.author.username}: ${args}${resetColor}`);
+
+        // Send confirmation to the Discord channel
+        message.channel.send('Your message has been logged to the console.');
+    }
+});
+
 // Respond to specific messages
 client.on('messageCreate', async (message) => {
     // Ignore messages from bots
@@ -209,33 +279,50 @@ client.on('messageCreate', async (message) => {
     // Respond to !ping command and send latency
     if (message.content === '!ping') {
         const sent = Date.now();
+        console.log('Bot: Pinging...')
         message.channel.send('Pinging...').then(sentMessage => {
             const timeTaken = Date.now() - sent;
             sentMessage.edit(`Pong! Latency is ${timeTaken}ms. API Latency is ${Math.round(client.ws.ping)}ms.`);
+            console.log(`Latency is ${timeTaken}ms. API Latency is ${Math.round(client.ws.ping)}ms.`);
         });
     }
-
+   
+    
+    /*
+  // Respond to !say command
+client.on('messageCreate', async (message) => {
+    // Ignore messages from bots
+    if (message.author.bot) return;
 
     // Respond to !say command
-    client.on('messageCreate', async (message) => {
-        // Ignore messages from bots
-        if (message.author.bot) return;
-    
-        // Respond to !say command
-        if (message.content.startsWith('!say')) {
-            const sayMessage = message.content.slice('!say'.length).trim();
-    
-            if (!sayMessage) {
-                return message.channel.send('Please provide a message for the bot to say.');
-            }
-    
-            await message.channel.send({ content: sayMessage });
-            await message.delete();
+    if (message.content.startsWith('!say')) {
+        const sayMessage = message.content.slice('!say'.length).trim();
+
+        if (!sayMessage) {
+            return message.channel.send('Please provide a message for the bot to say.');
         }
-    });    
+
+        await message.channel.send({ content: sayMessage });
+
+        // Ensure the bot has permission to delete messages and the message was sent by a user
+        if (message.deletable) {
+            await message.delete().catch((err) => {
+                console.error('Failed to delete message:', err);
+            });
+        }
+    }
+});
+*/
+
+//Moderation Commands
+
+
 
     // Respond to !uptime command
     if (message.content === '!uptime') {
+        if (isTestMode) {
+            console.warn(`${message.author.username} used !uptime`);
+        }
         const totalSeconds = (client.uptime / 1000);
         const days = Math.floor(totalSeconds / 86400);
         const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -244,6 +331,7 @@ client.on('messageCreate', async (message) => {
 
         const uptime = `${days}d ${hours}h ${minutes}m ${seconds}s`;
         message.channel.send(`I have been online for: ${uptime}`);
+        console.log(`Online time: ${uptime}`);
     }
 
     // Respond to !news command
@@ -253,7 +341,8 @@ client.on('messageCreate', async (message) => {
             .setTitle('Latest News')
             .setDescription(
                 '**__Here are the latest updates:__**\n' +
-                '* Fixed issues related to Music Commands\n\n'+
+                '* Fixed issues related to Music Commands\n'+
+                '* Added !stroke command\n\n'+
             
                 '# Dev Notes\n'+
                 'Currently we\'ve patched the issue related to Music Commands. We\'re currently not sure if this works or not as we\'re unable to test it.\n'+
@@ -264,6 +353,9 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: 'Changelog provided by AetherX Bot Devs' });
 
         message.channel.send({ embeds: [newsEmbed] });
+        if (isTestMode) {
+            console.warn(`${message.author.username} used !changelog`);
+        }
     }
 
    
@@ -274,10 +366,16 @@ client.on('messageCreate', async (message) => {
         } else {
             message.channel.send('https://tenor.com/view/lethal-company-horderbug-yippee-gif-gif-5658063361159083327');
         }
+        if (isTestMode) {
+            console.warn(`${message.author.username} used !yippie`);
+        }
     }
     
     if (message.content === 'shit') {
             message.channel.send('https://tse1.mm.bing.net/th/id/OIP.EDAz3VIJM7DB0aKqMAenOQHaNK?w=187&h=333&c=7&r=0&o=5&pid=1.7');
+            if (isTestMode) {
+                console.warn(`${message.author.username} needed a toilet`);
+            }
     }
     
 
@@ -288,14 +386,17 @@ client.on('messageCreate', async (message) => {
             .setTitle('AetherX Bot Information')
             .setDescription('AetherX is a custom Discord bot designed by Androgalaxi and lmutt090.\n\nInvite the bot to your server using [this link](https://discord.com/oauth2/authorize?client_id=1067646246254284840&scope=bot&permissions=8) or the link below.')
             .addFields(
-                { name: 'Developer', value: 'Androgalaxi and lmutt090' },
-                { name: 'Bot Version', value: '1.0.0' },
+                { name: 'Developer', value: '[Androgalaxi](https://discord.com/users/435125886996709377) and [lmutt090](https://discord.com/users/1286383453016686705)' },
+                { name: 'Bot Version', value: '0.3' },
                 { name: 'Bot Invite Link', value: '[Invite AetherX](https://discord.com/oauth2/authorize?client_id=1067646246254284840&scope=bot&permissions=8)' },
                 { name: 'Support Server', value: '[Join the Support Server](https://discord.gg/yFY8Fnbtp9)' }
             )
             .setFooter({ text: 'AetherX Bot - Created with suffering by Androgalaxi and lmutt090' });
 
         message.channel.send({ embeds: [aboutEmbed] });
+        if (isTestMode) {
+            console.warn(`${message.author.username} GOT OUR INFO`);
+        }
     }
 });
 
@@ -551,21 +652,50 @@ client.on('messageCreate', (message) => {
 
         // Send the result to the channel
         message.channel.send(`🎲 You rolled a ${diceRoll}, <@${message.author.id}>!`);
+        if (isTestMode) {
+            console.warn(`${message.author.username} used !d&d roll and got a ${diceRoll}`);
+        }
     }
     
     // Respond to the basic !d&d command
     if (message.content === '!d&d') {
         message.channel.send('I only have !d&d roll... DON\'T THINK ABOUT USING !d&d rizz');
+        if (isTestMode) {
+            console.warn(`${message.author.username} used !d&d`);
+        }
     }/*
     if (message.content === '!d&d rizz') {
         message.channel.send('@admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin @admin MUTE HIM');
+                if (isTestMode) {
+            console.warn(`${message.author.username} used something bad....................`);
+        }
     }*/
-    if (message.content === '!dnd') {
-        message.channel.send('!d&d')
-    }/*
     if (message.content === '!d&d surrender'){
-        message.channel.send('your ded lololololololololol')
-    }*/
+        message.channel.send(':skull:')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('...')
+        message.channel.send('your ded')
+        if (isTestMode) {
+            console.warn(`${message.author.username} died by a falling anvil... lololololololololololololololololololololololololololololololololololololololololololololololololololololololololololol`);
+        }
+    }
 });
 
 //Start of BlackJack
@@ -648,6 +778,10 @@ async function startBlackjackGame(message) {
 
     const playerScore = calculateScore(playerHand);
     const dealerScore = calculateScore(dealerHand);
+    if (isTestMode) {
+        console.warn(`Player has ${playerScore}`);
+        console.warn(`Dealer has ${dealerScore}`);
+    }
 
     // Check if either player or dealer starts with 21
     if (playerScore === 21 || dealerScore === 21) {
@@ -655,12 +789,21 @@ async function startBlackjackGame(message) {
         if (playerScore === 21 && dealerScore === 21) {
             // Both player and dealer have 21 - it's a tie
             resultEmbed = createResultEmbed(playerScore, dealerScore, 'tie');
+            if (isTestMode) {
+                console.warn('Dealer/Player win... uhhhhhhhhhhhhhhhhhhhhhhhhhhhh');
+            }
         } else if (playerScore === 21) {
             // Player wins instantly
             resultEmbed = createResultEmbed(playerScore, dealerScore, 'win');
+            if (isTestMode) {
+                console.warn('Player win, 21');
+            }
         } else {
             // Dealer wins instantly
             resultEmbed = createResultEmbed(playerScore, dealerScore, 'lose');
+            if (isTestMode) {
+                console.warn('Dealer win, 21');
+            }
         }
         return message.channel.send({ embeds: [resultEmbed] });
     }
@@ -682,19 +825,30 @@ async function startBlackjackGame(message) {
     collector.on('collect', async (buttonInteraction) => {
         if (buttonInteraction.user.id !== message.author.id) {
             return buttonInteraction.reply({ content: 'This is not your game!', ephemeral: true });
+            console.warn('Someone mean >:(');
         }
 
         if (buttonInteraction.customId === 'hit') {
             playerHand.push(getCard());
+            if (isTestMode) {
+                console.warn('Player hit');
+                console.warn(`${playerScore}`)
+            }
 
             if (calculateScore(playerHand) > 21) {
                 // Player busts
                 collector.stop('bust');
+                if (isTestMode) {
+                    console.warn('Player Bust');
+                }
             } else {
                 const updatedEmbed = createGameEmbed(playerHand, dealerHand);
                 await buttonInteraction.update({ embeds: [updatedEmbed], components: [row] });
             }
         } else if (buttonInteraction.customId === 'stand') {
+            if (isTestMode) {
+                console.warn('Player Stand');
+            }
             // Dealer's turn
             while (calculateScore(dealerHand) < 17) {
                 dealerHand.push(getCard());
@@ -716,14 +870,32 @@ async function startBlackjackGame(message) {
         } else if (reason === 'stand') {
             if (finalDealerScore > 21 || finalPlayerScore > finalDealerScore) {
                 resultEmbed = createResultEmbed(finalPlayerScore, finalDealerScore, 'win');
+                if (isTestMode) {
+                    if (finalDealerScore > 21) {
+                        console.warn(`Player wins, bust: ${finalPlayerScore} < ${finalDealerScore} < 21`)
+                    } else {
+                        console.warn(`Player win: ${finalPlayerScore} > ${finalDealerScore}`)
+                    }
+                }
             } else if (finalPlayerScore === finalDealerScore) {
                 resultEmbed = createResultEmbed(finalPlayerScore, finalDealerScore, 'tie');
+                if (isTestMode) {
+                    console.warn(`Dealer/Player win: both have ${finalPlayerScore}`);
+                }
             } else {
                 resultEmbed = createResultEmbed(finalPlayerScore, finalDealerScore, 'lose');
+                if (isTestMode) {
+                    console.warn(`Dealer win: ${finalPlayerScore} < ${finalDealerScore}`);
+                }
             }
         } else if (reason === 'forfeit') {
             resultEmbed = createResultEmbed(finalPlayerScore, finalDealerScore, 'lose');
             resultEmbed.setDescription('You forfeited the game.');
+            if (isTestMode) {
+                console.warn('Dealer win: Forfit');
+                console.warn(`Player: ${finalPlayerScore}`)
+                console.warn(`Dealer: ${finalDealerScore}`)
+            }
         }
 
         await gameMessage.edit({ embeds: [resultEmbed], components: [] });
@@ -759,6 +931,9 @@ client.on('messageCreate', async (message) => {
     if (message.content === '!blackjack' || message.content === '!bj') {
         if (isOnCooldown(message.author.id, message)) {
             return; // Don't start the game if on cooldown
+        }
+        if (isTestMode) {
+            console.warn(`${message.author.username} started a BlackJack game`);
         }
 
         await startBlackjackGame(message);
@@ -1130,9 +1305,32 @@ client.on('messageCreate', async (message) => {
         await startCoinFlipGame(message);
     }
 });
-
 //End of Coin Flip
 
+// Listen for "!stroke" to cause a stroke
+client.on('messageCreate', async (message) => {
+    if (message.content === '!stroke' || message.content === '!S T R O K E' || message.content === 'Ey boss') {
+        // Read the content of the .txt file
+        console.log(`${message.author.username} wanted me to have a stroke...`)
+        const filePath = path.join(__dirname, 'msg', 'HEEEELP!.txt');
+        
+        fs.readFile(filePath, 'utf8', async (err, data) => {
+            if (err) {
+                console.error('Error reading the file:', err);
+                return message.channel.send('There was an error reading the help file.');
+            }
+
+            // Send the content of the .txt file as the initial message
+            const sentMessage = await message.channel.send(data);
+
+            // Wait for 10 seconds (10000 ms)
+            setTimeout(async () => {
+                // Edit the original message to :skull:
+                await sentMessage.edit(`:skull:`);
+            }, 1000); // 10-second delay
+        });
+    }
+});
 
 //Start of Trivia Quiz
 
@@ -1374,27 +1572,26 @@ client.on('messageCreate', async (message) => {
 
 //End of AFK
 
-/*
 client.on(Events.MessageCreate, (message) => {
-    // Define the set of users allowed to use this command (replace with actual user IDs)
-    const allowedUsers = ['435125886996709377', '1286383453016686705']; // Add allowed user IDs here
-
     // Check if the message starts with the specific command
-    if (message.content.startsWith('!aetherx news')) {
+    if (message.content.startsWith('!news')) {
         // Check if the message author is in the allowedUsers array
         if (allowedUsers.includes(message.author.id)) {
             // Get the message content after the command
-            const userMessage = message.content.slice('!aetherx news'.length).trim();
+            const userMessage = message.content.slice('!news'.length).trim();
 
             // Check if the user provided a message
             if (!userMessage) {
-                return message.channel.send('Please provide a message to send.');
+                message.channel.send('Please provide a message to send.');
+                console.log(`News posting failed: No message content provided by ${message.author.tag} (${message.author.id})`);
+                return;
             }
 
-            // Create an embed
+            // Create an embed and mention the person who posted it in the embed description
             const embed = new EmbedBuilder()
                 .setTitle('AetherX News Update')
                 .setDescription(userMessage)
+                .addFields({ name: 'Posted By', value: `<@${message.author.id}>` }) // Mention the author in the embed
                 .setColor('#0099ff')  // You can change the color
                 .setTimestamp()
                 .setFooter({ text: 'AetherX News Bot', iconURL: 'https://i.imgur.com/AfFp7pu.png' }); // Optional footer and icon
@@ -1407,17 +1604,166 @@ client.on(Events.MessageCreate, (message) => {
             if (designatedChannel) {
                 // Send the embed and mention @AetherX News (replace with the correct role ID)
                 designatedChannel.send({
-                    content: '<@&1291074211904749658>',  // Replace with actual role ID for @AetherX News
+                    content: '||[Milkeyway Lounge](https://discord.gg/B9hjJKu3) Only: <@&1291074211904749658>||',  // Mention role
                     embeds: [embed],
+                })
+                .then(() => {
+                    // Log success to console
+                    console.log(`News posted by ${message.author.tag} (${message.author.id}): ${userMessage}`);
+                })
+                .catch((error) => {
+                    // Log any error to the console
+                    console.log(`Failed to post news by ${message.author.tag} (${message.author.id}). Error: ${error}`);
                 });
             } else {
                 message.channel.send('Designated channel not found.');
+                console.log(`News posting failed: Designated channel not found for ${message.author.tag} (${message.author.id})`);
             }
         } else {
             // Notify the user they don't have permission to use the command
             message.channel.send('You do not have permission to use this command.');
+            console.log(`Unauthorized news posting attempt by ${message.author.tag} (${message.author.id})`);
         }
     }
 });
-*/
+
+//Start of Tickets
+
+// Respond to !nh command
+client.on('messageCreate', async (message) => {
+    if (message.content === '!nh') {
+        const nhEmbed = new EmbedBuilder()
+            .setTitle('Support Information')
+            .setDescription('For assistance, DM the bot with `!ticket` to create a support ticket.')
+            .setColor('DarkBlue')
+            .setFooter({ text: 'Our team will assist you shortly.' });
+
+        const channel = message.guild.channels.cache.get('1115793036023181342'); // Replace with the channel ID where the message should go
+        if (channel) channel.send({ embeds: [nhEmbed] });
+    }
+});
+
+// Create Ticket via DM
+client.on('messageCreate', async (message) => {
+    if (message.guild === null && message.content === '!ticket') {
+        const guild = client.guilds.cache.get('1067095151736012902'); // Replace with your server ID
+        const category = guild.channels.cache.get('1293048687202668585'); // Replace with the category ID
+
+        const ticketChannel = await guild.channels.create({
+            name: `ticket-${message.author.username}`,
+            type: 'GUILD_TEXT',
+            parent: category.id,
+            permissionOverwrites: [
+                {
+                    id: message.author.id,
+                    allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'],
+                },
+                {
+                    id: guild.roles.everyone.id,
+                    deny: ['VIEW_CHANNEL'],
+                },
+                {
+                    id: 'STAFF_ROLE_ID', // Replace with the staff role ID
+                    allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'],
+                }
+            ]
+        });
+
+        const ticketEmbed = new EmbedBuilder()
+            .setTitle('Ticket Created')
+            .setDescription('A support team member will assist you shortly.')
+            .setColor('DarkBlue');
+
+        await message.author.send({ embeds: [ticketEmbed] });
+        ticketChannel.send(`<@${message.author.id}> Ticket created! A staff member will be with you shortly.`);
+    }
+});
+
+// Staff sending messages in ticket channels (ax! prefix)
+client.on('messageCreate', async (message) => {
+    if (message.channel.parentId === 'YOUR_CATEGORY_ID' && message.content.startsWith('ax!')) {
+        const args = message.content.split(' ').slice(1).join(' ');
+        const userID = message.channel.name.split('-')[1]; // Assuming ticket is named `ticket-<username>`
+
+        const user = await client.users.fetch(userID);
+        if (!user) return message.channel.send('User not found.');
+
+        const embed = new EmbedBuilder()
+            .setDescription(args)
+            .setColor('DarkBlue');
+
+        await user.send({ embeds: [embed] });
+        message.channel.send('Message sent to the user.');
+    }
+});
+
+// Pre-made message commands for staff
+client.on('messageCreate', async (message) => {
+    if (message.channel.parentId === 'YOUR_CATEGORY_ID') {
+        const userID = message.channel.name.split('-')[1];
+        const user = await client.users.fetch(userID);
+
+        if (message.content.startsWith('ax!hello')) {
+            const helloEmbed = new EmbedBuilder()
+                .setDescription('Hello! How can we assist you today?')
+                .setColor('DarkBlue');
+            await user.send({ embeds: [helloEmbed] });
+        } else if (message.content.startsWith('ax!notify')) {
+            // Notify logic (store a reference to ping staff later if needed)
+        } else if (message.content.startsWith('ax!pm1')) {
+            const pm1Embed = new EmbedBuilder()
+                .setDescription('We would love to partner with you! Here’s our ad for you to post.')
+                .setColor('DarkBlue');
+            await user.send({ embeds: [pm1Embed] });
+        } else if (message.content.startsWith('ax!pm2')) {
+            const pm2Embed = new EmbedBuilder()
+                .setDescription('Thank you for posting our ad! We have confirmed the partnership.')
+                .setColor('DarkBlue');
+            await user.send({ embeds: [pm2Embed] });
+        } else if (message.content.startsWith('ax!morehelp')) {
+            const moreHelpEmbed = new EmbedBuilder()
+                .setDescription('Is there anything else we can assist you with?')
+                .setColor('DarkBlue');
+            await user.send({ embeds: [moreHelpEmbed] });
+        } else if (message.content.startsWith('ax!needreply')) {
+            const needReplyEmbed = new EmbedBuilder()
+                .setDescription('We need a response from you. If we don’t hear back within 12 hours, we will close the ticket automatically.')
+                .setColor('DarkBlue');
+            await user.send({ embeds: [needReplyEmbed] });
+
+            // Close the ticket after 12 hours if no response
+            setTimeout(async () => {
+                const updatedChannel = message.guild.channels.cache.get(message.channel.id);
+                if (updatedChannel) {
+                    await updatedChannel.delete();
+                    await user.send('Your ticket has been closed due to no response. If you need further assistance, feel free to open a new ticket.');
+                }
+            }, 12 * 60 * 60 * 1000); // 12 hours in milliseconds
+        } else if (message.content.startsWith('ax!close')) {
+            message.channel.delete();
+            await user.send('Your ticket has been closed. If you need further assistance, feel free to open a new ticket.');
+        }
+    }
+});
+
+// Image handling (staff sending images to users)
+client.on('messageCreate', async (message) => {
+    if (message.channel.parentId === 'YOUR_CATEGORY_ID' && message.attachments.size > 0) {
+        const userID = message.channel.name.split('-')[1];
+        const user = await client.users.fetch(userID);
+
+        const attachment = message.attachments.first();
+        const embed = new EmbedBuilder()
+            .setDescription('Here’s an image from our support team:')
+            .setImage(attachment.url)
+            .setColor('DarkBlue');
+
+        await user.send({ embeds: [embed] });
+    }
+});
+
+
+//End of Tickets
+
+
 client.login(process.env.BOT_TOKEN);
