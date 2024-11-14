@@ -1,3 +1,5 @@
-.env
-!.json
+# Ignore environment variable file
+.en
+
+# Ignore the specific config file
 config.json
