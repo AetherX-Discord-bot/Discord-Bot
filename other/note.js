@@ -1,0 +1,1 @@
+console.log('Started "bot.js" using "start.bat" (".\\start.bat" command)');
