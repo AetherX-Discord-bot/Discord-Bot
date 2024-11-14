@@ -2,7 +2,7 @@
 .env
 
 # Ignore the specific config file
-config.jso
+config.json
 
 # Allow all other .json files
 !.json
