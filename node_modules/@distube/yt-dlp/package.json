@@ -1,0 +1,71 @@
+{
+  "name": "@distube/yt-dlp",
+  "version": "2.0.1",
+  "author": "Skick",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/distubejs/extractor-plugins.git"
+  },
+  "main": "./dist/index.js",
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "discord.js": "^14.15.3",
+    "distube": "^5.0.1",
+    "eslint": "^8.57.0",
+    "eslint-config-distube": "^1.7.0",
+    "is-ci": "^3.0.1",
+    "prettier": "^3.3.1",
+    "tslib": "^2.6.3",
+    "tsup": "^8.1.0",
+    "typescript": "^5.4.5"
+  },
+  "exports": "./dist/index.js",
+  "bugs": {
+    "url": "https://github.com/distubejs/extractor-plugins/issues"
+  },
+  "description": "A DisTube playable extractor plugin using yt-dlp.",
+  "directories": {
+    "lib": "src"
+  },
+  "files": [
+    "dist",
+    "script"
+  ],
+  "funding": "https://github.com/skick1234/DisTube?sponsor",
+  "homepage": "https://github.com/distubejs/extractor-plugins/tree/main/packages/yt-dlp#readme",
+  "keywords": [
+    "distube",
+    "plugin",
+    "discord",
+    "music"
+  ],
+  "license": "MIT",
+  "nano-staged": {
+    "*.ts": [
+      "prettier --write",
+      "eslint"
+    ],
+    "*.{json,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
+  "peerDependencies": {
+    "distube": "5"
+  },
+  "typings": "./dist/index.d.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "dargs": "^7.0.0",
+    "undici": "^6.18.2"
+  },
+  "scripts": {
+    "format": "prettier --write \"**/*.{js,ts,json,yml,yaml,md}\"",
+    "lint": "eslint .",
+    "build": "tsup",
+    "type": "tsc --noEmit",
+    "postinstall": "is-ci || node script/download.js"
+  }
+}
