@@ -1,34 +1,52 @@
 // Import the necessary modules
 require('dotenv').config();
-const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ComponentType, Events, Intents, interactionCreate } = require('discord.js');
+const { Client, GatewayIntentBits, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ComponentType, Events, Intents, interactionCreate, StringSelectMenuBuilder, AttachmentBuilder, Partials, ActivityType } = require('discord.js');
+const schedule = require('node-schedule');
+const spotifyClientId = process.env.SPOTIFY_CLIENT_ID;
+const spotifyClientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+const youtubeApiKey = process.env.YOUTUBE_API_KEY;
+/*const WORDNIK_API_KEY = process.env.WORDNIK_API_KEY;*/ //This will be enabled for testing once the API key arrives (ETA: Unknown)
+const notificationConfig = require('./notifications.json');
+const { token, clientId, guildId } = require('./config.json');
 const { DisTube } = require('distube');
 const { YtDlpPlugin } = require('@distube/yt-dlp');
 const { SpotifyPlugin } = require('@distube/spotify');
+const axios = require('axios');
 const { REST } = require('@discordjs/rest');
 const { Routes } = require('discord-api-types/v10');
 const isTestMode = false; // Change to false when not in test mode
 const afkUsers = new Map();
-const axios = require('axios');
 const he = require('he');
 const fs = require('fs');
 const path = require('path');
 //const { Routes } = require('discord-api-types/v9');
-const clientId = '1067646246254284840';
-const guildId = '1094423468566646894';
-const token = process.env.BOT_TOKEN;
 const rest = new REST({ version: '10' }).setToken(token);
 const dotenv = require('dotenv');
 const EventEmitter = require('events');
 const emitter = new EventEmitter();
+// Axios instance for StartGG API
+const startGGAPI = axios.create({
+    baseURL: 'https://api.start.gg/gql/alpha',
+    headers: { 'Authorization': `Bearer ${process.env.STARTGG_API_KEY}` }
+  });
 const userColors = {
     '435125886996709377': '\x1b[32m', //androgalaxi=blue
     '1286383453016686705': '\x1b[38;5;205m', //Lmutt090=pink
-    // Add more users and colors as needed
+    '1123769629165244497': '\x1b[38;5;226m'
 };
-const resetColor = '\x1b[0m'; // Reset color
+const userColorsN = {
+    '435125886996709377': '#1e90ff', // Androgalaxi = neutral blue
+    '1286383453016686705': '#ff82ab', // Lmutt090 = soft pink
+    '1123769629165244497': '#ffff00'
+};
 
 // Group: DIRECT user Perms
-const allowedUsers = ['435125886996709377', '1286383453016686705'];
+const allowedUsers = fs.readFileSync(path.join(__dirname, 'other', 'allowed.txt'), 'utf-8')
+    .split('\n')
+    .map(id => id.trim())
+    .filter(id => id.length > 0); // Remove any empty lines or whitespace
+
+console.log('Allowed people are ' + allowedUsers); // For debugging: outputs the array of allowed users
 // const trustUsers = ['userid'];
 // const level1allow = [...trustUsers, ...allowedUsers];
 // Group end
@@ -42,8 +60,9 @@ const client = new Client({
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.GuildPresences // Add this line for presence intent
-    ]
+        GatewayIntentBits.GuildPresences,
+    ],
+    partials: [Partials.Channel] // Required for DM support
 });
 
 // Logging for any errors that are not caught in the terminal
@@ -53,6 +72,31 @@ process.on('unhandledRejection', (error) => {
 
 client.on('error', (error) => {
     console.error('Client error:', error);
+});
+
+// Function to log errors to error.log
+function logError(error) {
+    const errorMessage = `[${new Date().toISOString()}] ${error}\n`;
+    fs.appendFileSync('./error.log', errorMessage, 'utf8');
+}
+
+// Capture console errors
+console.error = (function(oldError) {
+    return function(...args) {
+        logError(args.join(' '));
+        oldError.apply(console, args);
+    };
+})(console.error);
+
+// Capture unhandled promise rejections
+process.on('unhandledRejection', (reason) => {
+    logError(`Unhandled Rejection: ${reason}`);
+});
+
+// Capture uncaught exceptions
+process.on('uncaughtException', (err) => {
+    logError(`Uncaught Exception: ${err}`);
+    process.exit(1); // Optional: Exit the process after logging the error
 });
 
 //MaxListeners
@@ -67,24 +111,38 @@ emitter.setMaxListeners(30)
 require('dotenv').config(); // Ensure dotenv is required correctly
 
 // Import your command files
-const aboutCommand = require('./commands/about');
-const banCommand = require('./commands/ban');
-const kickCommand = require('./commands/kick');
-const muteCommand = require('./commands/mute');
-const unmuteCommand = require('./commands/unmute');
-const timeoutCommand = require('./commands/timeout')
+const aboutCommand = require('./commands/about.js');
+const banCommand = require('./commands/ban.js');
+const kickCommand = require('./commands/kick.js');
+const muteCommand = require('./commands/mute.js');
+const unmuteCommand = require('./commands/unmute.js');
+const timeoutCommand = require('./commands/timeout.js');
+const sayCommand = require('./commands/say.js');
+const pingCommand = require('./commands/ping.js');
+const uptimeCommand = require('./commands/uptime.js');
+const setStatusCommand = require('./commands/setstatus.js');
+const remindCommand = require('./commands/reminder.js');
 
-// Define commands array
+// Build the commands array for registration
 const commands = [
-    aboutCommand.data.toJSON(), // Use toJSON for slash command registration
+    aboutCommand.data.toJSON(),
     banCommand.data.toJSON(),
     kickCommand.data.toJSON(),
     muteCommand.data.toJSON(),
     unmuteCommand.data.toJSON(),
-    timeoutCommand.data.toJSON()
+    timeoutCommand.data.toJSON(),
+    sayCommand.data.toJSON(),
+    pingCommand.data.toJSON(),
+    uptimeCommand.data.toJSON(),
+    setStatusCommand.data.toJSON(),
+    remindCommand.data.toJSON(),
 ];
 
 // Now, you can use this 'commands' array to register your commands with Discord
+
+//Spofiy Log
+console.log(`Spotify Client ID: ${spotifyClientId}`);
+console.log(`Spotify Client Secret: ${spotifyClientSecret}`);
 
 // Register the slash commands when the bot is ready
 client.once('ready', async () => {
@@ -104,6 +162,37 @@ client.once('ready', async () => {
         console.warn(`\"You have test mode set to \'true\', set it to \'false\' when you are done testing it!\" -Lucas \（・ω‐\）`);
     }
     console.log('\x1b[34m%s\x1b[0m', '\"Make sure to use clear when you\'re done!\" -Lucas \（・ω‐\）');
+
+    client.on('interactionCreate', async interaction => {
+        if (!interaction.isCommand()) return; // Make sure it's a slash command
+      
+        const { commandName } = interaction;
+      
+        // Find and execute the corresponding command
+        if (commandName === 'about') {
+            await aboutCommand.execute(interaction);
+        } else if (commandName === 'ban') {
+            await banCommand.execute(interaction);
+        } else if (commandName === 'kick') {
+            await kickCommand.execute(interaction);
+        } else if (commandName === 'mute') {
+            await muteCommand.execute(interaction);
+        } else if (commandName === 'unmute') {
+            await unmuteCommand.execute(interaction);
+        } else if (commandName === 'timeout') {
+            await timeoutCommand.execute(interaction);
+        } else if (commandName === 'say') {
+            await sayCommand.execute(interaction);
+        } else if (commandName === 'ping') {
+            await pingCommand.execute(interaction);
+        } else if (commandName === 'uptime') {
+            await uptimeCommand.execute(interaction);
+        } else if (commandName === 'setstatus') {
+            await setStatusCommand.execute(interaction);
+        } else if (commandName === 'remind') {
+            await remindCommand.execute(interaction);
+        }
+    });
 });
 
 const distube = new DisTube(client, {
@@ -140,15 +229,201 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
+//Auto Restart Config | DO NOT TOUCH
+// Load restart.json
+/* const config = JSON.parse(fs.readFileSync('restart.json', 'utf8'));
+
+// Schedule restarts for each specified time
+config.restartTimes.forEach(time => {
+    schedule.scheduleJob(time, () => {
+        console.log("Restarting bot...");
+        process.exit(0); // Exit to trigger the PM2 restart
+    });
+});
+
+console.log("Restart schedules loaded:", config.restartTimes);
+
+*/
+// Your Giphy API Key
+const GIPHY_API_KEY = process.env.GIPHY_API_KEY;
+
+client.once('ready', () => {
+    console.log(`Logged in as ${client.user.tag}`);
+});
+
+function logErrorToFile(error) {
+    const errorMessage = `[${new Date().toISOString()}] ${error}\n`;
+    fs.appendFile('error.log', errorMessage, (err) => {
+        if (err) console.error('Failed to write to log file:', err);
+    });
+}
+
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.content.startsWith('!gif')) return;
+
+    const query = message.content.split(' ').slice(1).join(' ');
+    if (!query) {
+        return message.channel.send('Please provide a search term after the command (e.g., `!gif happy`).');
+    }
+
+    try {
+        const response = await axios.get(`https://api.giphy.com/v1/gifs/search`, {
+            params: {
+                api_key: GIPHY_API_KEY,
+                q: query,
+                limit: 1,
+                rating: 'g'
+            }
+        });
+
+        if (response.data.data.length === 0) {
+            return message.channel.send('No GIFs found for that search term.');
+        }
+
+        const gifUrl = response.data.data[0].images.original.url;
+        console.log('Fetched GIF URL:', gifUrl);
+
+        // Path to the Giphy watermark GIF file
+        const footerGifPath = path.join('H:', 'Giphy Attribution Marks', 'Animated Logos', 'PoweredBy_200_Horizontal_Light-Backgrounds_With_Logo.gif');
+        const footerGifAttachment = new MessageAttachment(footerGifPath, 'GiphyWatermark.gif');
+
+        const embed = new MessageEmbed()
+            .setColor(0x0099ff)
+            .setTitle(`Here's a GIF for: ${query}`)
+            .setImage(gifUrl)
+            .setFooter('Powered by Giphy', 'attachment://GiphyWatermark.gif');
+
+        await message.channel.send({
+            embeds: [embed],
+            files: [footerGifAttachment]
+        });
+
+        setTimeout(() => {
+            message.delete().catch(console.error);
+        }, 5000);
+
+    } catch (error) {
+        console.error('Error in messageCreate event:', error);
+        logErrorToFile(error);
+        message.channel.send('An error occurred while fetching the GIF. Please try again later.');
+    }
+});
+
 // Map to store the last help message for each user
 const userHelpMessages = new Map();
+
+//Server Info
+client.on('messageCreate', async (message) => {
+    // Ignore messages from bots
+    if (message.author.bot) return;
+
+    // Check if the message starts with "!serverinfo" or "!sinfo"
+    if (message.content.startsWith('!serverinfo') || message.content.startsWith('!sinfo')) {
+        const { guild } = message;
+
+        // Fetch server information
+        const serverName = guild.name;
+        const createdAt = Math.floor(guild.createdTimestamp / 1000);
+        const memberCount = guild.memberCount;
+        const roleCount = guild.roles.cache.size;
+        const textChannelCount = guild.channels.cache.filter(channel => channel.type === 'GUILD_TEXT').size;
+        const voiceChannelCount = guild.channels.cache.filter(channel => channel.type === 'GUILD_VOICE').size;
+        const owner = await guild.fetchOwner();
+        
+        // Fetch owner roles and get the highest role name
+        const ownerRoles = owner.roles.cache;
+        const ownerRole = ownerRoles.size > 0 ? ownerRoles.sort((a, b) => b.position - a.position).first().name : 'No Role';
+
+        // Additional details
+        const boostCount = guild.premiumSubscriptionCount || 0;
+        const boostTier = guild.premiumTier ? `Tier ${guild.premiumTier}` : 'None';
+        const moderationLevel = guild.verificationLevel;
+        const explicitContentFilter = guild.explicitContentFilter;
+
+        // Helper function to format fields with inline code for values only
+        const formatField = (label, value, useCodeBlock = true) => 
+            useCodeBlock ? `${label} : \`${value}\`` : `${label} : ${value}`;
+
+        // Create an embed with server information
+        const serverEmbed = new EmbedBuilder()
+            .setTitle(`Server Info - ${serverName}`)
+            .setColor(0xADD8E6) // Light blue color
+            .setThumbnail(guild.iconURL({ dynamic: true }))
+            .addFields(
+                { name: formatField('Server Name', serverName, false), value: '\u200b' },
+                { name: formatField('Created On', `<t:${createdAt}:F>`, false), value: '\u200b' },
+                { name: formatField('Owner', owner.user.tag, false), value: `Role: ${ownerRole}` }, // Display owner name and role
+                { name: formatField('Total Members', `${memberCount}`), value: '\u200b' },
+                { name: formatField('Roles', `${roleCount}`), value: '\u200b' },
+                { name: formatField('Text Channels', `${textChannelCount}`), value: '\u200b' },
+                { name: formatField('Voice Channels', `${voiceChannelCount}`), value: '\u200b' },
+                { name: formatField('Boosts', `${boostCount} (${boostTier})`), value: '\u200b' },
+                { name: formatField('Moderation Level', `${moderationLevel}`), value: '\u200b' },
+                { name: formatField('Explicit Content Filter', `${explicitContentFilter}`), value: '\u200b' }
+            )
+            .setTimestamp();
+
+        // Send the server information embed
+        await message.channel.send({ embeds: [serverEmbed] });
+    }
+});
+
+//User profile options
+client.on('messageCreate', async (message) => {
+    // Ignore messages from bots
+    if (message.author.bot) return;
+
+    if (message.content.startsWith('!profile')) {
+        const args = message.content.split(' ').slice(1);
+        let targetUser;
+
+        if (args.length === 0) {
+            // No user mentioned, use the message author
+            targetUser = message.author;
+        } else {
+            // Check if the argument is a mention or an ID
+            if (message.mentions.users.size > 0) {
+                targetUser = message.mentions.users.first();
+            } else {
+                // Try to find the user by ID
+                targetUser = await client.users.fetch(args[0]).catch(() => null);
+            }
+        }
+
+        if (!targetUser) {
+            // Create an error embed
+            const errorEmbed = new EmbedBuilder()
+                .setTitle('User Not Found')
+                .setDescription('Please mention a valid user or provide a valid user ID.')
+                .setColor(0xFF0000); // Red color for error
+
+            return message.channel.send({ embeds: [errorEmbed] });
+        }
+
+        // Fetch guild member to get roles and joined date
+        const guildMember = message.guild.members.cache.get(targetUser.id) || await message.guild.members.fetch(targetUser.id);
+
+        // Create a profile embed
+        const profileEmbed = new EmbedBuilder()
+            .setTitle(`${targetUser.username}'s Profile`)
+            .setColor(0x57b9ff) // Updated color
+            .addFields(
+                { name: '__User Information__', value: `**User ID:** ${targetUser.id}\n—\n**Username:** ${targetUser.username}\n—\n**Is Bot:** ${targetUser.bot ? 'Yes' : 'No'}\n—\n**Created At:** <t:${Math.floor(targetUser.createdTimestamp / 1000)}:F>`, inline: false },
+                { name: '__Server Information__', value: `**Joined Server:** <t:${Math.floor(guildMember.joinedTimestamp / 1000)}:F>\n—\n**Roles:** ${guildMember.roles.cache.map(role => `<@&${role.id}>`).join(', ') || 'No roles'}`, inline: false }
+            )
+            .setThumbnail(targetUser.displayAvatarURL());
+
+        // Send the profile embed
+        await message.channel.send({ embeds: [profileEmbed] });
+    }
+});
 
 // Function to send or edit help message based on the requested page
 async function sendHelpMessage(message, page = 1) { // Default page is 1
     const helpPages = [
         {
             title: 'General Commands',
-            description: '!changelog - Display changes made to the bot.\n!request - Request a feature or features to be added\n!afk - Go afk and set a custom message\n!ping - Displays the bot latency and API latency.\n!help - Shows this help menu with all available commands.\n!yippie - Sends a "Yippee" GIF.\n!global [message] - Sends a message to all servers where the bot is present.\n!about or !info - Provides information about the bot, developer, and invites.'
+            description: '!changelog - Display changes made to the bot.\n!request - Request a feature or features to be added\n!afk - Go afk and set a custom message\n!ping - Displays the bot latency and API latency.\n!help - Shows this help menu with all available commands.\n!yippie - Sends a "Yippee" GIF.\n!global [message] - Sends a message to all servers where the bot is present.\n!about or !info - Provides information about the bot, developer, and invites.\n!profile/!profile @user/!profile (user ID) - See information on a users profile.'
         },
         {
             title: 'Music Commands',
@@ -160,7 +435,7 @@ async function sendHelpMessage(message, page = 1) { // Default page is 1
         },
         {
             title: 'Game Commands',
-            description: '!blackjack or !bj - Play a game of BlackJack.\n!dnd - Roll the dice!\n!highlow or !hl - Play a game of HighLow\n!tictactoe or !ttt - Play a game of TicTacToe against another user or the bot\n !coinflip or !cf - Flip a coin\n!trivia or !quiz - Try to pick the correct answer on a random question\n !rockpaperscissors or !rps - Play a game of Rock Paper Scissors'
+            description: '!blackjack or !bj - Play a game of BlackJack.\n!d&d - Roll the dice!\n!highlow or !hl - Play a game of HighLow\n!tictactoe or !ttt - Play a game of TicTacToe against another user or the bot\n !coinflip or !cf - Flip a coin\n!trivia or !quiz - Try to pick the correct answer on a random question\n !rockpaperscissors or !rps - Play a game of Rock Paper Scissors'
         }
     ];
 
@@ -231,6 +506,30 @@ async function sendHelpMessage(message, page = 1) { // Default page is 1
     }
 }
 
+client.on('messageCreate', async (message) => {
+    if (message.author.bot || !message.content.startsWith('!purge')) return;
+
+    const args = message.content.split(' ').slice(1);
+    const amount = parseInt(args[0]);
+
+    if (!message.member.permissions.has('MANAGE_MESSAGES')) {
+        return message.reply('You do not have permission to use this command.');
+    }
+
+    if (!amount || amount < 1 || amount > 100) {
+        return message.reply('Please specify a number of messages to delete (1-100).');
+    }
+
+    try {
+        const deletedMessages = await message.channel.bulkDelete(amount + 1, true);
+        message.channel.send(`Deleted ${deletedMessages.size - 1} messages.`)
+            .then(msg => setTimeout(() => msg.delete(), 5000));
+    } catch (error) {
+        console.error(error);
+        message.reply('There was an error trying to purge messages in this channel.');
+    }
+});
+
 // Listen for the message "!help" to start the help command
 client.on('messageCreate', async message => {
     if (message.content === '!help') {
@@ -264,7 +563,7 @@ client.on('messageCreate', async (message) => {
         const userColor = userColors[message.author.id] || '\x1b[37m'; // Default to white if user not found
 
         // Log the message to the console with the user's color
-        console.log(`${userColor}[LOG] ${message.author.username}: ${args}${resetColor}`);
+        console.log(`${userColor}[LOG] ${message.author.username}: ${args}\x1b[37m`);
 
         // Send confirmation to the Discord channel
         message.channel.send('Your message has been logged to the console.');
@@ -286,25 +585,50 @@ client.on('messageCreate', async (message) => {
             console.log(`Latency is ${timeTaken}ms. API Latency is ${Math.round(client.ws.ping)}ms.`);
         });
     }
+
+client.on('messageCreate', async (message) => {
+    // Check if the command is `!cringeattack`
+    if (message.content.startsWith('!cringeattack')) {
+        // Define the path to the image file you want the bot to post
+        const filePath = path.join(__dirname, 'images', 'file.gif'); // Replace 'file.gif' with the actual file name
+
+        // Create the attachment from the file
+        const file = new AttachmentBuilder(filePath);
+
+        // Post the file in the same channel where the command was sent
+        message.channel.send({ files: [file] })
+            .then(() => {
+                console.log(`Image posted by bot in ${message.channel.name}`);
+            })
+            .catch(error => {
+                console.error(`Failed to post image: ${error}`);
+                message.channel.send('There was an error posting the image.');
+            });
+    }
+});
+
    
     
-    /*
-  // Respond to !say command
+    
+// Respond to !say command
 client.on('messageCreate', async (message) => {
     // Ignore messages from bots
     if (message.author.bot) return;
 
-    // Respond to !say command
+    // Check if the message starts with "!say"
     if (message.content.startsWith('!say')) {
+        // Remove the command part "!say" and trim any whitespace
         const sayMessage = message.content.slice('!say'.length).trim();
 
+        // If no message was provided, prompt the user to provide one
         if (!sayMessage) {
-            return message.channel.send('Please provide a message for the bot to say.');
+            return await message.channel.send('Please provide a message for the bot to say.');
         }
 
-        await message.channel.send({ content: sayMessage });
+        // Send the user's message through the bot
+        await message.channel.send('n');
 
-        // Ensure the bot has permission to delete messages and the message was sent by a user
+        // Check if the bot has permission to delete the message, then delete it
         if (message.deletable) {
             await message.delete().catch((err) => {
                 console.error('Failed to delete message:', err);
@@ -312,7 +636,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 });
-*/
+
 
 //Moderation Commands
 
@@ -334,21 +658,16 @@ client.on('messageCreate', async (message) => {
         console.log(`Online time: ${uptime}`);
     }
 
-    // Respond to !news command
+    // Respond to !changelog command
     if (message.content === '!changelog') {
         const newsEmbed = new EmbedBuilder()
             .setColor(0x00ff00)
             .setTitle('Latest News')
             .setDescription(
                 '**__Here are the latest updates:__**\n' +
-                '* Fixed issues related to Music Commands\n'+
-                '* Added !stroke command\n\n'+
-            
-                '# Dev Notes\n'+
-                'Currently we\'ve patched the issue related to Music Commands. We\'re currently not sure if this works or not as we\'re unable to test it.\n'+
-                'If you notice a bug or want to suggest something while the bot is online use !request (type your message here).\n\n'+
+                'an anti crash setup\nIT BETTER WORK!!!!!!!!!!!\n\n'+
 
-                'We\'ll be working on patching the message issues related to Tic-Tac-Toe as well as Trivia/Quiz.'
+                '**That\'s all for now!**'
             )
             .setFooter({ text: 'Changelog provided by AetherX Bot Devs' });
 
@@ -400,7 +719,7 @@ client.on('messageCreate', async (message) => {
     }
 });
 
-    // Music commands
+// Music commands
 client.on('messageCreate', async (message) => {
     // Ignore messages from bots
     if (message.author.bot) return;
@@ -579,7 +898,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             // List of user IDs to DM (Add more user IDs if needed)
-            const userIds = ['435125886996709377', '1286383453016686705']; // Replace with your user IDs
+            const userIds = ['435125886996709377', '1286383453016686705', '1123769629165244497']; // Replace with your user IDs
 
             // Create an embed for the request
             const requestEmbed = new EmbedBuilder()
@@ -659,7 +978,7 @@ client.on('messageCreate', (message) => {
     
     // Respond to the basic !d&d command
     if (message.content === '!d&d') {
-        message.channel.send('I only have !d&d roll... DON\'T THINK ABOUT USING !d&d rizz');
+        message.channel.send('I only have `!d&d roll`, `!d&d surrender`');
         if (isTestMode) {
             console.warn(`${message.author.username} used !d&d`);
         }
@@ -672,22 +991,6 @@ client.on('messageCreate', (message) => {
     }*/
     if (message.content === '!d&d surrender'){
         message.channel.send(':skull:')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
-        message.channel.send('...')
         message.channel.send('...')
         message.channel.send('...')
         message.channel.send('...')
@@ -1062,7 +1365,7 @@ async function startRPSGame(message) {
     const promptEmbed = new EmbedBuilder()
         .setTitle('Rock, Paper, Scissors')
         .setDescription('Type "rock", "paper", or "scissors" to make your choice!')
-        .setColor(0x00FF00);
+        .setColor(0x00FF00); // Green for the prompt
 
     await message.channel.send({ embeds: [promptEmbed] });
 
@@ -1079,23 +1382,27 @@ async function startRPSGame(message) {
 
         // Determine the result
         let result;
+        let embedColor = 0x00FF00; // Default to green for win
         if (userChoice === botChoice) {
             result = "It's a tie!";
+            embedColor = 0xFFFF00; // Yellow for tie
         } else if (
             (userChoice === 'rock' && botChoice === 'scissors') ||
             (userChoice === 'paper' && botChoice === 'rock') ||
             (userChoice === 'scissors' && botChoice === 'paper')
         ) {
             result = 'You win!';
+            embedColor = 0x00FF00; // Green for win
         } else {
             result = 'You lose!';
+            embedColor = 0xFF0000; // Red for loss
         }
 
-        // Send the result embed
+        // Send the result embed with the appropriate color
         const resultEmbed = new EmbedBuilder()
             .setTitle('Rock, Paper, Scissors')
             .setDescription(`You chose **${userChoice}**.\nThe bot chose **${botChoice}**.\n${result}`)
-            .setColor(0x00FF00);
+            .setColor(embedColor); // Set color based on the result
 
         await message.channel.send({ embeds: [resultEmbed] });
 
@@ -1144,6 +1451,79 @@ function checkWinner(board) {
     return null; // No winner yet
 }
 
+// Minimax algorithm for bot moves
+function minimax(newBoard, depth, isMaximizing) {
+    const result = checkWinner(newBoard);
+    if (result === 'O') return 1; // Bot wins
+    if (result === 'X') return -1; // Opponent wins
+    if (newBoard.every(cell => cell !== null)) return 0; // Tie
+
+    const availableMoves = newBoard.map((cell, index) => (cell === null ? index : null)).filter(x => x !== null);
+
+    if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (const move of availableMoves) {
+            const tempBoard = [...newBoard];
+            tempBoard[move] = 'O'; // Bot plays O
+            const score = minimax(tempBoard, depth + 1, false);
+            bestScore = Math.max(score, bestScore);
+        }
+        return bestScore;
+    } else {
+        let bestScore = Infinity;
+        for (const move of availableMoves) {
+            const tempBoard = [...newBoard];
+            tempBoard[move] = 'X'; // Opponent plays X
+            const score = minimax(tempBoard, depth + 1, true);
+            bestScore = Math.min(score, bestScore);
+        }
+        return bestScore;
+    }
+}
+
+// Function for bot move based on difficulty
+function botMove(board, difficulty) {
+    const availableMoves = board.map((cell, index) => (cell === null ? index : null)).filter(x => x !== null);
+
+    if (difficulty === 'easy') {
+        return availableMoves[Math.floor(Math.random() * availableMoves.length)]; // Random move
+    }
+
+    if (difficulty === 'medium') {
+        // Medium difficulty: Try to win or block the opponent
+        for (const move of availableMoves) {
+            const tempBoard = [...board];
+            tempBoard[move] = 'O'; // Bot plays O
+            if (checkWinner(tempBoard) === 'O') return move; // Win
+        }
+        for (const move of availableMoves) {
+            const tempBoard = [...board];
+            tempBoard[move] = 'X'; // Opponent plays X
+            if (checkWinner(tempBoard) === 'X') return move; // Block
+        }
+        return availableMoves[Math.floor(Math.random() * availableMoves.length)]; // Random move
+    }
+
+    if (difficulty === 'hard') {
+        // Hard difficulty: Minimax algorithm
+        let bestMove;
+        let bestValue = -Infinity;
+
+        for (const move of availableMoves) {
+            const tempBoard = [...board];
+            tempBoard[move] = 'O'; // Bot plays O
+            const moveValue = minimax(tempBoard, 0, false);
+            if (moveValue > bestValue) {
+                bestValue = moveValue;
+                bestMove = move;
+            }
+        }
+        return bestMove;
+    }
+
+    return availableMoves[Math.floor(Math.random() * availableMoves.length)]; // Default move if all else fails
+}
+
 // Function to create buttons for each cell
 function createBoardButtons(board) {
     const actionRows = [];
@@ -1165,7 +1545,7 @@ function createBoardButtons(board) {
 }
 
 // Function to start a Tic-Tac-Toe game against another user or bot
-async function startTicTacToe(message, mode) {
+async function startTicTacToe(message, mode, difficulty = 'easy') {
     const board = Array(9).fill(null); // Create an empty Tic-Tac-Toe board
     let currentPlayer = 'X'; // X always goes first
     let gameOver = false; // Track if game is over
@@ -1210,8 +1590,8 @@ async function startTicTacToe(message, mode) {
         await gameMessage.edit({ embeds: [embed], components: createBoardButtons(board) }); // Update buttons
 
         if (mode === 'bot' && currentPlayer === 'O') {
-            const botMove = board.indexOf(null);
-            await updateGameBoard(botMove); // Bot moves in the first available spot
+            const botMoveIndex = botMove(board, difficulty); // Get the bot's move based on difficulty
+            await updateGameBoard(botMoveIndex); // Bot makes its move
         }
     }
 
@@ -1242,7 +1622,7 @@ async function selectTicTacToeMode(message) {
         .setDescription('Select the game mode:\n- Play against another user\n- Play against the bot')
         .setColor(0x00FF00);
 
-    const buttons = new ActionRowBuilder()
+    const modeButtons = new ActionRowBuilder()
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('play_with_user')
@@ -1254,33 +1634,91 @@ async function selectTicTacToeMode(message) {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-    const modeMessage = await message.channel.send({ embeds: [modeEmbed], components: [buttons] });
+    const modeMessage = await message.channel.send({ embeds: [modeEmbed], components: [modeButtons] });
 
-    // Create a collector to listen for button clicks
-    const collector = modeMessage.createMessageComponentCollector({ time: 30000 });
+    // Create a collector to listen for mode selection
+    const collector = modeMessage.createMessageComponentCollector({ time: 60000 });
 
     collector.on('collect', async (interaction) => {
-        if (interaction.customId === 'play_with_user') {
-            await interaction.update({ embeds: [new EmbedBuilder().setTitle('Starting a game with another user...').setColor(0x00FF00)], components: [] });
-            await startTicTacToe(message, 'user');
-        } else if (interaction.customId === 'play_with_bot') {
-            await interaction.update({ embeds: [new EmbedBuilder().setTitle('Starting a game against the bot...').setColor(0x00FF00)], components: [] });
-            await startTicTacToe(message, 'bot');
-        }
+        await interaction.deferUpdate(); // Acknowledge the button click
+        const mode = interaction.customId === 'play_with_user' ? 'user' : 'bot';
+        collector.stop();
+
+        // Select difficulty after mode selection
+        selectDifficulty(message, mode);
     });
 
-    // Handle timeout
     collector.on('end', async () => {
-        await modeMessage.edit({ embeds: [new EmbedBuilder().setTitle('No selection made. Game cancelled.').setColor(0xFF0000)], components: [] });
+        await modeMessage.edit({ components: [] }); // Disable buttons after timeout
     });
 }
 
-// Listen for the message "!tictactoe" or "!ttt" to start the game
+// Function to select difficulty level
+async function selectDifficulty(message, mode) {
+    const difficultyEmbed = new EmbedBuilder()
+        .setTitle('Select Difficulty Level')
+        .setDescription('Choose your difficulty:\n- Easy\n- Medium\n- Hard')
+        .setColor(0x00FF00);
+
+    const difficultyButtons = new ActionRowBuilder()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('easy')
+                .setLabel('Easy')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId('medium')
+                .setLabel('Medium')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('hard')
+                .setLabel('Hard')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    const difficultyMessage = await message.channel.send({ embeds: [difficultyEmbed], components: [difficultyButtons] });
+
+    const filter = (interaction) => interaction.user.id === message.author.id;
+    const collector = difficultyMessage.createMessageComponentCollector({ filter, time: 60000 });
+
+    collector.on('collect', async (interaction) => {
+        await interaction.deferUpdate(); // Acknowledge the button click
+        const difficulty = interaction.customId; // Get selected difficulty
+        collector.stop();
+
+        // Create an embed to confirm the selected difficulty
+        const confirmationEmbed = new EmbedBuilder()
+            .setTitle('Difficulty Selected')
+            .setDescription(`${interaction.user}, you have selected **${difficulty}** difficulty.`)
+            .setColor(0x00FF00);
+
+        await message.channel.send({ embeds: [confirmationEmbed] }); // Send confirmation message
+
+        // Start the Tic-Tac-Toe game with selected difficulty
+        await startTicTacToe(message, mode, difficulty);
+    });
+
+    collector.on('end', async () => {
+        await difficultyMessage.edit({ components: [] }); // Disable buttons after timeout
+    });
+}
+
+// Export the command for Tic-Tac-Toe
+module.exports = {
+    name: 'ttt',
+    description: 'Play Tic-Tac-Toe!',
+    execute(message) {
+        selectTicTacToeMode(message);
+    },
+};
+
+// Call the function to start the game (example)
 client.on('messageCreate', async (message) => {
     if (message.content === '!tictactoe' || message.content === '!ttt') {
-        await selectTicTacToeMode(message);
+        await selectTicTacToeMode(message); // Initiate game mode selection
     }
 });
+
 
 //End of Tic-Tac-Toe
 
@@ -1344,7 +1782,7 @@ async function fetchTriviaQuestion(category = null) {
         // Decode HTML entities in the question and answers
         const question = he.decode(triviaData.question);
         const options = [...triviaData.incorrect_answers, triviaData.correct_answer].map(answer => he.decode(answer));
-        
+
         // Shuffle options
         options.sort(() => Math.random() - 0.5);
 
@@ -1391,23 +1829,23 @@ async function startTriviaGame(message, category = null) {
 
     collector.on('collect', async (interaction) => {
         const userAnswer = interaction.customId; // A, B, C, D
-        const userAnswerText = trivia.options[interaction.customId.charCodeAt(0) - 65]; // Get the corresponding answer option
+        const userAnswerText = trivia.options[userAnswer.charCodeAt(0) - 65]; // Get the corresponding answer option
+        let responseEmbed;
 
         if (userAnswerText === trivia.answer) {
-            const correctEmbed = new EmbedBuilder()
+            responseEmbed = new EmbedBuilder()
                 .setTitle('Correct Answer!')
                 .setDescription(`You got it right! The correct answer was: **${trivia.answer}**.`)
                 .setColor(0x00FF00); // Green for correct
-
-            await interaction.update({ embeds: [correctEmbed], components: [] });
         } else {
-            const incorrectEmbed = new EmbedBuilder()
+            responseEmbed = new EmbedBuilder()
                 .setTitle('Wrong Answer!')
                 .setDescription(`You chose: **${userAnswerText}**\nThe correct answer was: **${trivia.answer}**.`)
                 .setColor(0xFF0000); // Red for incorrect
-
-            await interaction.update({ embeds: [incorrectEmbed], components: [] });
         }
+
+        // Update the original trivia message with the response and keep the options displayed
+        await triviaMessage.edit({ embeds: [triviaEmbed, responseEmbed], components: [] });
 
         // Stop the collector after an answer is submitted
         collector.stop();
@@ -1415,12 +1853,16 @@ async function startTriviaGame(message, category = null) {
 
     collector.on('end', async (collected, reason) => {
         if (reason === 'time') {
-            const timeoutEmbed = new EmbedBuilder()
-                .setTitle('Time is Up!')
-                .setDescription('No answer was selected within the time limit.')
-                .setColor(0xFFFF00); // Yellow for timeout
+            // Only show the timeout message if no answers were collected
+            if (collected.size === 0) {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setTitle('Time is Up!')
+                    .setDescription('No answer was selected within the time limit.')
+                    .setColor(0xFFFF00); // Yellow for timeout
 
-            await triviaMessage.edit({ embeds: [timeoutEmbed], components: [] });
+                await triviaMessage.edit({ embeds: [timeoutEmbed], components: [] });
+            }
+            // If collected.size > 0, an answer was submitted and no additional message is needed
         }
     });
 }
@@ -1457,13 +1899,23 @@ async function selectTriviaCategory(message) {
 
     collector.on('collect', async (interaction) => {
         const selectedCategory = interaction.customId;
-        await interaction.update({ content: `Category selected: ${categories.find(cat => cat.categoryId.toString() === selectedCategory).label}`, components: [] });
-        await startTriviaGame(message, selectedCategory);
+        const selectedEmbed = new EmbedBuilder()
+            .setTitle('Category Selected')
+            .setDescription(`You have selected: **${categories.find(cat => cat.categoryId.toString() === selectedCategory).label}**`)
+            .setColor(0x00FF00);
+
+        await interaction.update({ embeds: [selectedEmbed], components: [] });
+        await startTriviaGame(message, selectedCategory); // Start the trivia game with the selected category
     });
 
     collector.on('end', async (collected, reason) => {
         if (reason === 'time') {
-            await categoryMessage.edit({ content: 'No category selected. Game cancelled.', components: [] });
+            const timeoutEmbed = new EmbedBuilder()
+                .setTitle('Game Cancelled')
+                .setDescription('No category selected. Please try again later.')
+                .setColor(0xFF0000); // Red for cancellation
+
+            await categoryMessage.edit({ embeds: [timeoutEmbed], components: [] });
         }
     });
 }
@@ -1573,46 +2025,43 @@ client.on('messageCreate', async (message) => {
 //End of AFK
 
 client.on(Events.MessageCreate, (message) => {
-    // Check if the message starts with the specific command
     if (message.content.startsWith('!news')) {
-        // Check if the message author is in the allowedUsers array
         if (allowedUsers.includes(message.author.id)) {
-            // Get the message content after the command
             const userMessage = message.content.slice('!news'.length).trim();
 
-            // Check if the user provided a message
             if (!userMessage) {
                 message.channel.send('Please provide a message to send.');
                 console.log(`News posting failed: No message content provided by ${message.author.tag} (${message.author.id})`);
                 return;
             }
 
-            // Create an embed and mention the person who posted it in the embed description
+            // Get the color based on the author's ID, or default to a neutral color if not specified
+            const embedColor = userColorsN[message.author.id] || '#1e90ff';
+
+            // Create the embed with the dynamic color
             const embed = new EmbedBuilder()
                 .setTitle('AetherX News Update')
-                .setDescription(userMessage)
-                .addFields({ name: 'Posted By', value: `<@${message.author.id}>` }) // Mention the author in the embed
-                .setColor('#0099ff')  // You can change the color
+                .setDescription(`${userMessage}\n\n*Use !changelog for updates we didn't list in this news notice.*`)
+                .addFields({ name: 'Posted By', value: `<@${message.author.id}>` })
+                .setColor(embedColor) // Dynamic color based on user
                 .setTimestamp()
-                .setFooter({ text: 'AetherX News Bot', iconURL: 'https://i.imgur.com/AfFp7pu.png' }); // Optional footer and icon
+                .setFooter({
+                    text: 'AetherX News!',
+                    iconURL: 'https://cdn.discordapp.com/avatars/1067646246254284840/f251941fb561142385414ab7e4bb0d50?size=1024',
+                });
 
-            // Define your designated channel ID
-            const designatedChannelId = '1291076103628390442'; // Replace with the actual channel ID
-
-            // Get the designated channel
+            const designatedChannelId = '1067445342683005050'; // Replace with the actual channel ID
             const designatedChannel = client.channels.cache.get(designatedChannelId);
+
             if (designatedChannel) {
-                // Send the embed and mention @AetherX News (replace with the correct role ID)
                 designatedChannel.send({
-                    content: '||[Milkeyway Lounge](https://discord.gg/B9hjJKu3) Only: <@&1291074211904749658>||',  // Mention role
+                    content: '<@&1304455585793708124>',  // Mention role
                     embeds: [embed],
                 })
                 .then(() => {
-                    // Log success to console
                     console.log(`News posted by ${message.author.tag} (${message.author.id}): ${userMessage}`);
                 })
                 .catch((error) => {
-                    // Log any error to the console
                     console.log(`Failed to post news by ${message.author.tag} (${message.author.id}). Error: ${error}`);
                 });
             } else {
@@ -1620,8 +2069,7 @@ client.on(Events.MessageCreate, (message) => {
                 console.log(`News posting failed: Designated channel not found for ${message.author.tag} (${message.author.id})`);
             }
         } else {
-            // Notify the user they don't have permission to use the command
-            message.channel.send('You do not have permission to use this command.');
+            message.channel.send('You do not have permission to use this command. :middle_finger:');
             console.log(`Unauthorized news posting attempt by ${message.author.tag} (${message.author.id})`);
         }
     }
@@ -1645,125 +2093,217 @@ client.on('messageCreate', async (message) => {
 
 // Create Ticket via DM
 client.on('messageCreate', async (message) => {
+    // Ticket creation command
     if (message.guild === null && message.content === '!ticket') {
         const guild = client.guilds.cache.get('1067095151736012902'); // Replace with your server ID
-        const category = guild.channels.cache.get('1293048687202668585'); // Replace with the category ID
+        if (!guild) return;
 
-        const ticketChannel = await guild.channels.create({
-            name: `ticket-${message.author.username}`,
+        const category = guild.channels.cache.get('1304564673621917696'); // Replace with your category ID
+        if (!category) return;
+
+        const ticketChannel = await guild.channels.create(`ticket-${message.author.id}`, {
             type: 'GUILD_TEXT',
             parent: category.id,
             permissionOverwrites: [
-                {
-                    id: message.author.id,
-                    allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'],
-                },
-                {
-                    id: guild.roles.everyone.id,
-                    deny: ['VIEW_CHANNEL'],
-                },
-                {
-                    id: 'STAFF_ROLE_ID', // Replace with the staff role ID
-                    allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'],
-                }
+                { id: message.author.id, allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'] },
+                { id: guild.roles.everyone.id, deny: ['VIEW_CHANNEL'] },
+                { id: 'STAFF_ROLE_ID', allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'] } // Replace with your staff role ID
             ]
         });
 
-        const ticketEmbed = new EmbedBuilder()
+        const ticketEmbed = new MessageEmbed()
             .setTitle('Ticket Created')
             .setDescription('A support team member will assist you shortly.')
             .setColor('DarkBlue');
 
-        await message.author.send({ embeds: [ticketEmbed] });
+        await message.author.send({ embeds: [ticketEmbed] }).catch(() => 
+            message.reply('Unable to send a DM.')
+        );
         ticketChannel.send(`<@${message.author.id}> Ticket created! A staff member will be with you shortly.`);
     }
-});
 
-// Staff sending messages in ticket channels (ax! prefix)
-client.on('messageCreate', async (message) => {
-    if (message.channel.parentId === 'YOUR_CATEGORY_ID' && message.content.startsWith('ax!')) {
-        const args = message.content.split(' ').slice(1).join(' ');
-        const userID = message.channel.name.split('-')[1]; // Assuming ticket is named `ticket-<username>`
-
-        const user = await client.users.fetch(userID);
-        if (!user) return message.channel.send('User not found.');
-
-        const embed = new EmbedBuilder()
-            .setDescription(args)
-            .setColor('DarkBlue');
-
-        await user.send({ embeds: [embed] });
-        message.channel.send('Message sent to the user.');
-    }
-});
-
-// Pre-made message commands for staff
-client.on('messageCreate', async (message) => {
-    if (message.channel.parentId === 'YOUR_CATEGORY_ID') {
+    // Staff handling messages in ticket channels
+    else if (message.channel.parentId === 'YOUR_CATEGORY_ID') { // Replace with your category ID
         const userID = message.channel.name.split('-')[1];
-        const user = await client.users.fetch(userID);
+        const user = await client.users.fetch(userID).catch(() => null);
 
-        if (message.content.startsWith('ax!hello')) {
-            const helloEmbed = new EmbedBuilder()
-                .setDescription('Hello! How can we assist you today?')
-                .setColor('DarkBlue');
-            await user.send({ embeds: [helloEmbed] });
-        } else if (message.content.startsWith('ax!notify')) {
-            // Notify logic (store a reference to ping staff later if needed)
-        } else if (message.content.startsWith('ax!pm1')) {
-            const pm1Embed = new EmbedBuilder()
-                .setDescription('We would love to partner with you! Here’s our ad for you to post.')
-                .setColor('DarkBlue');
-            await user.send({ embeds: [pm1Embed] });
-        } else if (message.content.startsWith('ax!pm2')) {
-            const pm2Embed = new EmbedBuilder()
-                .setDescription('Thank you for posting our ad! We have confirmed the partnership.')
-                .setColor('DarkBlue');
-            await user.send({ embeds: [pm2Embed] });
-        } else if (message.content.startsWith('ax!morehelp')) {
-            const moreHelpEmbed = new EmbedBuilder()
-                .setDescription('Is there anything else we can assist you with?')
-                .setColor('DarkBlue');
-            await user.send({ embeds: [moreHelpEmbed] });
-        } else if (message.content.startsWith('ax!needreply')) {
-            const needReplyEmbed = new EmbedBuilder()
-                .setDescription('We need a response from you. If we don’t hear back within 12 hours, we will close the ticket automatically.')
-                .setColor('DarkBlue');
-            await user.send({ embeds: [needReplyEmbed] });
+        if (user) {
+            // Pre-made messages and ticket management commands
+            if (message.content.startsWith('ax!hello')) {
+                const helloEmbed = new MessageEmbed()
+                    .setDescription('Hello! How can we assist you today?')
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [helloEmbed] });
+            } else if (message.content.startsWith('ax!notify')) {
+                // Add custom logic for notify if needed
+            } else if (message.content.startsWith('ax!pm1')) {
+                const pm1Embed = new MessageEmbed()
+                    .setDescription('We would love to partner with you! Here’s our ad for you to post.')
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [pm1Embed] });
+            } else if (message.content.startsWith('ax!pm2')) {
+                const pm2Embed = new MessageEmbed()
+                    .setDescription('Thank you for posting our ad! We have confirmed the partnership.')
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [pm2Embed] });
+            } else if (message.content.startsWith('ax!morehelp')) {
+                const moreHelpEmbed = new MessageEmbed()
+                    .setDescription('Is there anything else we can assist you with?')
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [moreHelpEmbed] });
+            } else if (message.content.startsWith('ax!needreply')) {
+                const needReplyEmbed = new MessageEmbed()
+                    .setDescription('We need a response from you. If we don’t hear back within 12 hours, we will close the ticket automatically.')
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [needReplyEmbed] });
 
-            // Close the ticket after 12 hours if no response
-            setTimeout(async () => {
-                const updatedChannel = message.guild.channels.cache.get(message.channel.id);
-                if (updatedChannel) {
-                    await updatedChannel.delete();
-                    await user.send('Your ticket has been closed due to no response. If you need further assistance, feel free to open a new ticket.');
-                }
-            }, 12 * 60 * 60 * 1000); // 12 hours in milliseconds
-        } else if (message.content.startsWith('ax!close')) {
-            message.channel.delete();
-            await user.send('Your ticket has been closed. If you need further assistance, feel free to open a new ticket.');
+                // Close ticket after 12 hours if no response
+                setTimeout(async () => {
+                    const updatedChannel = message.guild.channels.cache.get(message.channel.id);
+                    if (updatedChannel) {
+                        await updatedChannel.delete();
+                        await user.send('Your ticket has been closed due to no response. If you need further assistance, feel free to open a new ticket.');
+                    }
+                }, 12 * 60 * 60 * 1000); // 12 hours in milliseconds
+            } else if (message.content.startsWith('ax!close')) {
+                await message.channel.delete();
+                await user.send('Your ticket has been closed. If you need further assistance, feel free to open a new ticket.');
+            }
+
+            // Staff sending images to users
+            else if (message.attachments.size > 0) {
+                const attachment = message.attachments.first();
+                const imageEmbed = new MessageEmbed()
+                    .setDescription('Here’s an image from our support team:')
+                    .setImage(attachment.url)
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [imageEmbed] });
+            }
+
+            // Staff general response to user via `ax!` prefix command
+            else if (message.content.startsWith('ax!')) {
+                const args = message.content.split(' ').slice(1).join(' ');
+                const generalResponseEmbed = new MessageEmbed()
+                    .setDescription(args)
+                    .setColor('DarkBlue');
+                await user.send({ embeds: [generalResponseEmbed] });
+                await message.channel.send('Message sent to the user.');
+            }
+        } else {
+            await message.channel.send('User not found.');
         }
     }
 });
 
-// Image handling (staff sending images to users)
-client.on('messageCreate', async (message) => {
-    if (message.channel.parentId === 'YOUR_CATEGORY_ID' && message.attachments.size > 0) {
-        const userID = message.channel.name.split('-')[1];
-        const user = await client.users.fetch(userID);
+//End of Tickets
 
-        const attachment = message.attachments.first();
-        const embed = new EmbedBuilder()
-            .setDescription('Here’s an image from our support team:')
-            .setImage(attachment.url)
-            .setColor('DarkBlue');
-
-        await user.send({ embeds: [embed] });
+client.on("message", async (message) => {
+    // Command to restart the bot
+    if (message.content === "!restart") {
+        // Check if the user is in the allowed list
+        if (allowedUsers.includes(message.author.id)) {
+            await message.channel.send("Restarting bot...");
+            console.log($(message.author.id) + "has restarted the bot")
+            
+            // Restart logic - kill process to allow automatic restart or programmatic restart
+            process.exit(); // This exits the current process to trigger a restart
+        } else {
+            message.channel.send("You do not have permission to restart the uptime counter.");
+        }
     }
 });
 
+// Function to fetch data from StartGG
+async function queryStartGG(query, variables) {
+  try {
+    const response = await startGGAPI.post('', { query, variables });
+    return response.data.data;
+  } catch (error) {
+    console.error('Error:', error);
+    return null;
+  }
+}
 
-//End of Tickets
+// Command listener
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  if (message.content.startsWith('!tournament')) {
+    const tournamentQuery = `
+      query($name: String!) {
+        tournaments(query: {name: $name}) {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    `;
+    const name = message.content.split(' ')[1] || 'smash';
+    const result = await queryStartGG(tournamentQuery, { name });
+    if (result && result.tournaments.nodes.length > 0) {
+      result.tournaments.nodes.forEach(tournament => {
+        message.channel.send(`**Tournament:** ${tournament.name} (ID: ${tournament.id})`);
+      });
+    } else {
+      message.channel.send('No tournaments found.');
+    }
+  }
+
+  if (message.content.startsWith('!hub')) {
+    const hubQuery = `
+      query($slug: String!) {
+        hub(slug: $slug) {
+          id
+          name
+        }
+      }
+    `;
+    const slug = message.content.split(' ')[1] || 'smash';
+    const result = await queryStartGG(hubQuery, { slug });
+    if (result && result.hub) {
+      message.channel.send(`**Hub:** ${result.hub.name} (ID: ${result.hub.id})`);
+    } else {
+      message.channel.send('Hub not found.');
+    }
+  }
+
+  if (message.content.startsWith('!team')) {
+    const teamQuery = `
+      query($slug: String!) {
+        team(slug: $slug) {
+          id
+          name
+        }
+      }
+    `;
+    const slug = message.content.split(' ')[1] || 'team-name';
+    const result = await queryStartGG(teamQuery, { slug });
+    if (result && result.team) {
+      message.channel.send(`**Team:** ${result.team.name} (ID: ${result.team.id})`);
+    } else {
+      message.channel.send('Team not found.');
+    }
+  }
+
+  if (message.content.startsWith('!user')) {
+    const userQuery = `
+      query($userId: String!) {
+        user(id: $userId) {
+          id
+          username
+        }
+      }
+    `;
+    const userId = message.content.split(' ')[1] || 'user-id';
+    const result = await queryStartGG(userQuery, { userId });
+    if (result && result.user) {
+      message.channel.send(`**User:** ${result.user.username} (ID: ${result.user.id})`);
+    } else {
+      message.channel.send('User not found.');
+    }
+  }
+});
 
 
 client.login(process.env.BOT_TOKEN);
