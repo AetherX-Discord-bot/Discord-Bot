@@ -1,6 +1,22 @@
 # AetherX Bot 🤖  
 *A multipurpose Discord bot packed with mini-games, utilities, and fun!*
 
+Table of contents
+
+## Table of Contents
+1. [🎮 Features](#-features)  
+   - [🎲 Mini-Games](#-mini-games)  
+   - [🛠️ Utilities](#️-utilities)  
+   - [⚙ Customization](#-customization)  
+   - [💻 Developer](#-developer)  
+2. [📋 Commands](#-commands)  
+   - [🔹 General Commands](#-general-commands)  
+   - [🔹 Mini-Games](#-mini-games-1)  
+   - [🔹 Moderation & Tools](#-moderation--tools)  
+   - [🔹 Misc](#-misc)  
+   - [🔹 Developer](#-developer-1)  
+3. [🚀 Installation](#-installation)
+
 ---
 
 ## 🎮 Features
