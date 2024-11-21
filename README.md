@@ -18,12 +18,19 @@ AetherX Bot offers a variety of features to enhance your Discord experience:
 ### 🛠️ Utilities
 - **AFK System**: Mark yourself AFK, notify others, and track your time away.
 - **Reminder System**: Set reminders for specific times, delivered to your DM or server.
-- **Server Info**: Displays server details like member count, channels, roles, and more.
+- **Server Info**: Displays server details like member count, channels, and roles.
 
-### 🌟 Customization
+### ⚙ Customization
 - **Rich Presence**: Dynamic status updates for the bot.
 - **Word of the Day (WOTD)**: Learn something new daily, including word meaning and history.
 - **Ticket System**: Manage support tickets directly in Discord with advanced features for staff communication.
+
+### 💻 Developer
+- **User ID Restriction**: Require an ID allowing developers to use certain features.
+- **Restarting**: Restart your bot if you need to fix or update something.
+- **Logging**: Log to your terminal through the bot.
+- **News Posting**: Enter the ID to your News Channel to post to it!
+
 
 ---
 
@@ -70,8 +77,5 @@ Follow these steps to run AetherX Bot on your server:
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/YourUsername/AetherX-Bot.git
+   git clone https://github.com/AetherX-Discord-bot/Discord-Bot.git
    cd AetherX-Bot
-
-
-This is a draft and all changes are not final. This will have to be manaully edited as it was generated with ChatGPT.
