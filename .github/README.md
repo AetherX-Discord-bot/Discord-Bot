@@ -1,7 +1,7 @@
 # AetherX Bot 🤖  
 *A multipurpose Discord bot packed with mini-games, utilities, and fun!*
 
-Table of contents
+---
 
 ## Table of Contents
 1. [🎮 Features](#-features)  
@@ -16,6 +16,8 @@ Table of contents
    - [🔹 Misc](#-misc)  
    - [🔹 Developer](#-developer-1)  
 3. [🚀 Installation](#-installation)
+   - [How to mod](./.github/modification.md)
+   - [How to contribute](./.github/modification.md)
 
 ---
 
@@ -95,3 +97,10 @@ Follow these steps to run AetherX Bot on your server:
    ```bash
    git clone https://github.com/AetherX-Discord-bot/Discord-Bot.git
    cd AetherX-Bot
+   ```
+
+### Modifying
+go to [How to mod](./.github/modification.md)
+
+### Contributing
+go to [How to contribute](./.github/modification.md)

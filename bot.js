@@ -39,6 +39,8 @@ const userColorsN = {
     '1286383453016686705': '#ff82ab', // Lmutt090 = soft pink
     '1123769629165244497': '#ffff00'
 };
+const designatedChannelId = '1067445342683005050'; // Replace with the actual channel ID
+const designatedChannel = client.channels.cache.get(designatedChannelId);
 
 // Group: DIRECT user Perms
 const allowedUsers = fs.readFileSync(path.join(__dirname, 'other', 'allowed.txt'), 'utf-8')
@@ -2050,12 +2052,9 @@ client.on(Events.MessageCreate, (message) => {
                     iconURL: 'https://cdn.discordapp.com/avatars/1067646246254284840/f251941fb561142385414ab7e4bb0d50?size=1024',
                 });
 
-            const designatedChannelId = '1067445342683005050'; // Replace with the actual channel ID
-            const designatedChannel = client.channels.cache.get(designatedChannelId);
-
             if (designatedChannel) {
                 designatedChannel.send({
-                    content: '<@&1304455585793708124>',  // Mention role
+                    content: 'News Kiddos!!!!',
                     embeds: [embed],
                 })
                 .then(() => {
