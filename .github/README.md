@@ -16,8 +16,8 @@
    - [🔹 Misc](#-misc)  
    - [🔹 Developer](#-developer-1)  
 3. [🚀 Installation](#-installation)
-   - [How to mod](./.github/modification.md)
-   - [How to contribute](./.github/modification.md)
+   - [How to mod](./modification.md/#-setup)
+   - [How to contribute](./modification.md/#-contributing)
 
 ---
 
