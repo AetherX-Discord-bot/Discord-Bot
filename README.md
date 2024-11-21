@@ -49,8 +49,21 @@ Here’s a brief overview of the commands available:
 |-----------|-------------------------------------------|
 | `!afk`    | Marks a user as AFK with a custom message.|
 | `!ticket` | Opens a new support ticket.               |
+| `/kick`   | Kicks a user.                             |
+| `/ban`    | Bans a user.                              |
 
----
+### 🔹 Misc
+| Commands | Description                                |
+|----------|--------------------------------------------|
+| `/say`   | Say a quote as the bot.                    |
+
+### 🔹 Developer
+| Commands   | Description                                |
+|------------|--------------------------------------------|
+| `!restart` | Restarts the bot.                          |
+| `!log`     | Logs something to the terminal for the bot.|
+| `!news`    | Posts news to a channel.                   |
+
 
 ## 🚀 Installation
 Follow these steps to run AetherX Bot on your server:
