@@ -100,7 +100,7 @@ Follow these steps to run AetherX Bot on your server:
    ```
 
 ### Modifying
-go to [How to mod](./.github/modification.md)
+go to [How to mod](./modification.md/#-setup)
 
 ### Contributing
-go to [How to contribute](./.github/modification.md)
+go to [How to contribute](./modification.md/#-contributing)
