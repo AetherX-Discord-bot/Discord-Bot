@@ -3,4 +3,5 @@
 
 # Ignore the specific config file
 config.json
+allowed.txt
 error.log
