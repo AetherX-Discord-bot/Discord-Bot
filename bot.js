@@ -29,26 +29,48 @@ const startGGAPI = axios.create({
     baseURL: 'https://api.start.gg/gql/alpha',
     headers: { 'Authorization': `Bearer ${process.env.STARTGG_API_KEY}` }
   });
-const userColors = {
-    '435125886996709377': '\x1b[32m', //androgalaxi=blue
-    '1286383453016686705': '\x1b[38;5;205m', //Lmutt090=pink
-    '1123769629165244497': '\x1b[38;5;226m'
-};
-const userColorsN = {
-    '435125886996709377': '#1e90ff', // Androgalaxi = neutral blue
-    '1286383453016686705': '#ff82ab', // Lmutt090 = soft pink
-    '1123769629165244497': '#ffff00'
-};
+  
+  // Read the file containing user details in the new format
+  const userDetailsPath = path.join(__dirname, 'other', 'allowed.txt');
+  const userDetails = fs.readFileSync(userDetailsPath, 'utf-8')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0); // Remove empty lines or whitespace
+  
+  // Objects to hold user-specific data
+  const userColors = {};
+  const userColorsN = {};
+  const allowedUsers = [];
+  const ownerUsers = [];
+  
+  // Parse the file into userColors, userColorsN, allowedUsers, and ownerUsers
+  let currentUserId = null;
+  
+  userDetails.forEach(line => {
+      if (!line.startsWith('-')) {
+          // A new UserID entry
+          currentUserId = line;
+          allowedUsers.push(currentUserId); // Add to allowed users by default
+      } else if (currentUserId) {
+          // Process details under the current UserID
+          const [key, value] = line.slice(1).split('=').map(part => part.trim());
+  
+          if (key === 'Hexcode') {
+              userColorsN[currentUserId] = value;
+          } else if (key === 'ANSIcode') {
+              userColors[currentUserId] = value;
+          } else if (key === 'Owner' && value.toLowerCase() === 'true') {
+              ownerUsers.push(currentUserId);
+          }
+      }
+  });
+  
+  console.log('Allowed users:', allowedUsers);
+  console.log('Owners:', ownerUsers);
+  console.log('ANSI colors:', userColors);
+  console.log('Hex colors:', userColorsN);  
 const designatedChannelId = '1067445342683005050'; // Replace with the actual channel ID
 const designatedChannel = client.channels.cache.get(designatedChannelId);
-
-// Group: DIRECT user Perms
-const allowedUsers = fs.readFileSync(path.join(__dirname, 'other', 'allowed.txt'), 'utf-8')
-    .split('\n')
-    .map(id => id.trim())
-    .filter(id => id.length > 0); // Remove any empty lines or whitespace
-
-console.log('Allowed people are ' + allowedUsers); // For debugging: outputs the array of allowed users
 // const trustUsers = ['userid'];
 // const level1allow = [...trustUsers, ...allowedUsers];
 // Group end
@@ -551,8 +573,9 @@ client.on('messageCreate', async (message) => {
     if (message.content.startsWith('!log') || message.content.startsWith('Aether,') || message.content.startsWith('Log this:')) {
         // Check if the user is allowed to log
         if (!allowedUsers.includes(message.author.id)) {
-            return message.channel.send('You do not have permission to use this command... LOL!!!! btw, this is a dev command...');
-            console.error(`${message.author.username} tried to log`)
+            message.channel.send('You do not have permission to use this command... LOL!!!! btw, this is a dev command...');
+            console.error(`${message.author.username} tried to log`);
+            return;
         }
 
         const args = message.content.split(' ').slice(1).join(' ');
@@ -561,11 +584,14 @@ client.on('messageCreate', async (message) => {
             return message.channel.send('Please provide a message to log.');
         }
 
+        // Determine the user's prefix based on ownership
+        const userPrefix = ownerUsers.includes(message.author.id) ? '(Owner)' : '(Dev)';
+
         // Determine the color for the log based on the user
         const userColor = userColors[message.author.id] || '\x1b[37m'; // Default to white if user not found
 
-        // Log the message to the console with the user's color
-        console.log(`${userColor}[LOG] ${message.author.username}: ${args}\x1b[37m`);
+        // Log the message to the console with the user's color and prefix
+        console.log(`${userColor}[LOG] ${userPrefix} ${message.author.username}: ${args}\x1b[37m`);
 
         // Send confirmation to the Discord channel
         message.channel.send('Your message has been logged to the console.');
