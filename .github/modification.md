@@ -10,15 +10,11 @@
 
 ## ⚙ Setup
 
-In other/allowed.txt put the id's of the allowed user in each line.
+In other/allowed.txt change the settings accordingly, makesure that you use the correct stuff or it will default to normal varibles: `Hex: Default`    `Ansi: White`    `Owner: No`
 
 In .env put the tokens in the respectful location.
 
 In config.json put the tokens in the respectful location.
-
-In bot.js on line `32` change the user id's and colors for the log. (format: `'id': 'ansicolorcode'`)
-
-In bot.js on line `37` change the user id's and colors for the news. (format: `'id': 'hexcolorcode'`)
 
 In bot.js on line `42` change the channel id so it posts to the correct channel.
 
