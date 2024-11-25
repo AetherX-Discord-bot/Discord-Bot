@@ -23,3 +23,5 @@ In bot.js on line `42` change the channel id so it posts to the correct channel.
 ## 🧑‍🤝‍🧑 Contributing
 
 When you want to contribute, fork the repo and DO NOT change the .gitignore, we will change it manually. Just put the note `.gitignore file` to the top of the file and we will do the rest!
+
+***`THIS REQUIRES THE TWO MAN RULE`***
