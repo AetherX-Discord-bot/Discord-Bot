@@ -76,13 +76,12 @@ Here’s a brief overview of the commands available:
 | `!highlow`   | Begins the HighLow guessing game.          |
 | `!ttt`       | Launches a game of Tic-Tac-Toe.            |
 
-### 🔹 Moderation & Tools
-| Command   | Description                               |
-|-----------|-------------------------------------------|
-| `!afk`    | Marks a user as AFK with a custom message.|
-| `!ticket` | Opens a new support ticket.               |
-| `/kick`   | Kicks a user.                             |
-| `/ban`    | Bans a user.                              |
+| Command   | Description                                                             |
+|-----------|-------------------------------------------------------------------------|
+| `!afk`    | Marks a user as AFK with a custom message.                              |
+| `!ticket` | Opens a new support ticket.                                             |
+| `/kick`   | Kicks a user, a user can use it on themself                             |
+| `/ban`    | Bans a user.                                                            |
 
 ### 🔹 Misc
 | Commands | Description                                |
