@@ -1,3 +1,5 @@
+This may be out of date, to see the updated version, go to the website
+
 # AetherX Bot 🤖  
 *A multipurpose Discord bot packed with mini-games, utilities, and fun!*
 
