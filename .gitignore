@@ -1,7 +1,0 @@
-# Ignore environment variable file
-.env
-
-# Ignore the specific config file
-config.json
-allowed.txt
-error.log

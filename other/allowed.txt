@@ -1,4 +1,0 @@
-UserID
-    -Hexcode=
-    -ANSIcode=
-    -Owner=true/false
