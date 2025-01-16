@@ -107,6 +107,9 @@ Follow these steps to run AetherX Bot on your server:
    cd AetherX-Bot
    ```
 
+### Support the Project
+We appreciate your support! Check out our [Donations Page](DONATIONS.md) to learn how you can contribute.
+
 ### Modifying
 go to [How to mod](./modification.md/#-setup)
 
