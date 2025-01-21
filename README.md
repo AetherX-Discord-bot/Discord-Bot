@@ -50,7 +50,7 @@ AetherX Bot offers a variety of features to enhance your Discord experience:
 ### ⚙ Customization
 - **Rich Presence**: Dynamic status updates for the bot.
 - **Word of the Day (WOTD)**: Learn something new daily, including word meaning and history.
-- **Ticket System**: Manage support tickets directly in Discord with advanced features for staff communication.
+- **Ticket System**: Manage support tickets directly in Discord with advanced features for staff communication. (please note the Ticket System currently doesn't work)
 
 ### 💻 Developer
 - **User ID Restriction**: Require an ID allowing developers to use certain features.
