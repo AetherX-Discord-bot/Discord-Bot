@@ -44,8 +44,9 @@ AetherX Bot offers a variety of features to enhance your Discord experience:
 
 ### 🛠️ Utilities
 - **AFK System**: Mark yourself AFK, notify others, and track your time away.
-- **Reminder System**: Set reminders for specific times, delivered to your DM or server.
+- **Reminder System**: Set reminders for specific times, delivered to your DM or server. (currently doesn't work)
 - **Server Info**: Displays server details like member count, channels, and roles.
+- **Profile Info**: Displays information about a mentioned user
 
 ### ⚙ Customization
 - **Rich Presence**: Dynamic status updates for the bot.
