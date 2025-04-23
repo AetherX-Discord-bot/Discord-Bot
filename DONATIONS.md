@@ -1,6 +1,6 @@
 # Support the Project with Donations
 
-Thank you for considering a donation to support [Bot Name]! Your contributions help us maintain, improve, and expand the bot, ensuring it remains available for everyone.
+Thank you for considering a donation to support AetherX! Your contributions help us maintain, improve, and expand the bot, ensuring it remains available for everyone.
 
 ## Why Donate?
 
@@ -28,6 +28,6 @@ Not in a position to donate? You can still help us by:
 
 ## Special Thanks
 
-We deeply appreciate every donation, big or small. Your support keeps [Bot Name] running and improving for everyone!
+We deeply appreciate every donation, big or small. Your support keeps AetherX running and improving for everyone!
 
 If you have any questions or concerns about donations, feel free to reach out to us at [AetherXdevs@outlook.com](mailto:AetherXdevs@outlook.com).
