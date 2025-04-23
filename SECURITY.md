@@ -40,4 +40,4 @@ By working together, we can ensure a safer experience for all users of the bot.
 
 ---
 
-This policy applies to all instances of the bot running our publicly available source code. If you a version of the bot yourself, ensure you follow best practices to secure your token and dependencies.
+This policy applies to all instances of the bot running our publicly available source code. If you run a version of the bot yourself, ensure you follow best practices to secure your token and dependencies.
