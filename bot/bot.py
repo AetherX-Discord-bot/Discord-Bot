@@ -20,7 +20,12 @@ async def load_cogs(bot):
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+# Get command prefix from environment, default to '!'
+def get_prefix(bot, message):
+    prefix = os.getenv('BOT_PREFIX', '!').strip()
+    return commands.when_mentioned_or(prefix)(bot, message)
+
+bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
 load_dotenv()
 
