@@ -23,7 +23,8 @@ class Uncatagorized(commands.Cog):
                     if not cmd.hidden:
                         try:
                             if await cmd.can_run(ctx):
-                                commands_list.append(f"{cmd.name} - {cmd.help or 'No description.'}")
+                                aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
+                                commands_list.append(f"{cmd.name}{aliases} - {cmd.help or 'No description.'}")
                         except Exception:
                             continue
                 if commands_list:
@@ -38,7 +39,8 @@ class Uncatagorized(commands.Cog):
                 if not cmd.cog and not cmd.hidden:
                     try:
                         if await cmd.can_run(ctx):
-                            uncategorized.append(f"/{cmd.name} - {cmd.help or 'No description.'}")
+                            aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
+                            uncategorized.append(f"/{cmd.name}{aliases} - {cmd.help or 'No description.'}")
                     except Exception:
                         continue
             if uncategorized:
@@ -58,7 +60,8 @@ class Uncatagorized(commands.Cog):
                     if not cmd.hidden:
                         try:
                             if await cmd.can_run(ctx):
-                                commands_list.append(f"{cmd.name} - {cmd.help or 'No description.'}")
+                                aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
+                                commands_list.append(f"{cmd.name}{aliases} - {cmd.help or 'No description.'}")
                         except Exception:
                             continue
                 if commands_list:
@@ -82,7 +85,8 @@ class Uncatagorized(commands.Cog):
                 if not cmd.hidden:
                     try:
                         if await cmd.can_run(ctx):
-                            commands_list.append(cmd.name)
+                            aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
+                            commands_list.append(f"{cmd.name}{aliases}")
                     except Exception:
                         continue
             if commands_list:
@@ -98,7 +102,8 @@ class Uncatagorized(commands.Cog):
             if not cmd.cog and not cmd.hidden:
                 try:
                     if await cmd.can_run(ctx):
-                        uncategorized.append(cmd.name)
+                        aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
+                        uncategorized.append(f"{cmd.name}{aliases}")
                 except Exception:
                     continue
         if uncategorized:

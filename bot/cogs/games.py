@@ -8,13 +8,13 @@ class Games(commands.Cog):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(name="coinflip", aliases=["cf"])
     async def coinflip(self, ctx):
         """Flip a coin!"""
         result = random.choice(["Heads", "Tails"])
         await ctx.send(f"🪙 The coin landed on: **{result}**!")
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(name="roll")
     async def roll(self, ctx, sides: int = 6):
         """Roll a die with a specified number of sides (default 6)."""
         if sides < 2:
@@ -23,7 +23,7 @@ class Games(commands.Cog):
         result = random.randint(1, sides)
         await ctx.send(f"🎲 You rolled a **{result}** (1-{sides})!")
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(name="blackjack", aliases=["bj"])
     async def blackjack(self, ctx):
         """Play a game of Blackjack against the bot."""
         deck = [str(n) for n in range(2, 11)] + list('JQKA')
