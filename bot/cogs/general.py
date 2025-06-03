@@ -1,12 +1,11 @@
 import discord
 from discord.ext import commands
-import os
-from dotenv import load_dotenv
 
 class General(commands.Cog):
     """A cog to handle general commands like ping, info, avatar, and banner."""
     def __init__(self, bot):
         self.bot = bot
+        self.config = getattr(bot, 'config', {})
 
     @commands.hybrid_command()
     async def ping(self, ctx):
@@ -15,27 +14,18 @@ class General(commands.Cog):
 
     @commands.hybrid_command()
     async def info(self, ctx):
-        load_dotenv()
-        owner_ids = os.getenv('BOT_OWNERS', '')
-        developer_ids = os.getenv('BOT_DEVELOPERS', '')
-        bot_website = os.getenv('BOT_WEBSITE', None)
-        bot_support = os.getenv('BOT_SUPPORT_SERVER', None)
-        bot_invite = os.getenv('BOT_INVITE_URL', None)
-        owner_mentions = []
-        developer_mentions = []
-        for oid in owner_ids.split(','):
-            oid = oid.strip()
-            if oid.isdigit():
-                owner_mentions.append(f'<@{oid}>')
-        for did in developer_ids.split(','):
-            did = did.strip()
-            if did.isdigit():
-                developer_mentions.append(f'<@{did}>')
+        owner_ids = self.config.get('BOT_OWNERS', [])
+        developer_ids = self.config.get('BOT_DEVELOPERS', [])
+        bot_website = self.config.get('BOT_WEBSITE', None)
+        bot_support = self.config.get('BOT_SUPPORT_SERVER', None)
+        bot_invite = self.config.get('BOT_INVITE_URL', None)
+        owner_mentions = [f'<@{oid}>' for oid in owner_ids]
+        developer_mentions = [f'<@{did}>' for did in developer_ids]
 
         # Fetch bot user and about me
         bot_user = self.bot.user
         bot_name = bot_user.name if bot_user else "AetherX Base Bot"
-        bot_about = bot_user.bio if hasattr(bot_user, 'bio') and bot_user.bio else "A simple Discord bot using discord.py"
+        bot_about = getattr(bot_user, 'bio', None) or "A simple Discord bot using discord.py"
 
         embed = discord.Embed(
             title=bot_name,
@@ -54,10 +44,6 @@ class General(commands.Cog):
             embed.add_field(name="Invite URL", value=bot_invite, inline=False)
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
-        
-        # To remove all variables loaded by dotenv (if you know their names)
-        for var in ['BOT_OWNERS', 'BOT_DEVELOPERS', 'BOT_WEBSITE', 'BOT_SUPPORT_SERVER', 'BOT_INVITE_URL']:
-            os.environ.pop(var, None)
 
     @commands.hybrid_command(name="avatar")
     async def avatar(self, ctx, user: discord.User = None):

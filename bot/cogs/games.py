@@ -6,6 +6,7 @@ class Games(commands.Cog):
     """A cog to handle various games like coinflip, roll, and blackjack."""
     def __init__(self, bot):
         self.bot = bot
+        self.config = getattr(bot, 'config', {})
 
     @commands.hybrid_command()
     async def coinflip(self, ctx):

@@ -5,6 +5,7 @@ class Uncatagorized(commands.Cog):
     """A cog to handle uncategorized commands and provide a help command."""
     def __init__(self, bot):
         self.bot = bot
+        self.config = getattr(bot, 'config', {})
 
     @commands.hybrid_command(name="help", with_app_command=True)
     async def help(self, ctx, *, arg: str = None):
@@ -107,11 +108,14 @@ class Uncatagorized(commands.Cog):
 
     # Override the default help command
     def cog_unload(self):
+        self.bot.help_command = self._original_help_command
+
+    async def cog_load(self):
+        self._original_help_command = self.bot.help_command
         self.bot.help_command = None
 
 def setup_help_override(bot):
     bot.help_command = None
 
 async def setup(bot):
-    setup_help_override(bot)
     await bot.add_cog(Uncatagorized(bot))

@@ -1,50 +1,49 @@
 import discord
 from discord.ext import commands
-import os
 import sys
-from dotenv import load_dotenv
-
-def is_developer_or_owner():
-    async def predicate(ctx):
-        # To remove all variables loaded by dotenv (if you know their names)
-        for var in ['BOT_OWNERS', 'BOT_DEVELOPERS']:
-            os.environ.pop(var, None)
-        load_dotenv()
-        if await ctx.bot.is_owner(ctx.author):
-            return True
-        developer_ids = os.getenv('BOT_DEVELOPERS', '')
-        developer_ids = [int(d.strip()) for d in developer_ids.split(',') if d.strip().isdigit()]
-        return ctx.author.id in developer_ids
-    return commands.check(predicate)
 
 class BotManagement(commands.Cog):
     """A cog to manage the bot, including shutdown, restart, and cog management."""
     def __init__(self, bot):
         self.bot = bot
+        self.config = getattr(bot, 'config', {})
+
+    def is_developer_or_owner(self, user_id):
+        owner_ids = self.config.get('BOT_OWNERS', [])
+        developer_ids = self.config.get('BOT_DEVELOPERS', [])
+        all_ids = set(owner_ids + developer_ids)
+        return user_id in all_ids
+
+    def developer_or_owner_check(self):
+        async def predicate(ctx):
+            if await ctx.bot.is_owner(ctx.author):
+                return True
+            return self.is_developer_or_owner(ctx.author.id)
+        return commands.check(predicate)
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def shutdown(self, ctx):
         """Shut down the bot (owner or developer only)."""
         await ctx.send("Shutting down...")
         await self.bot.close()
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def restart(self, ctx):
         """Restart the bot (owner or developer only, requires process manager)."""
         await ctx.send("Restarting bot...")
-        os.execv(sys.executable, ['python'] + sys.argv)
+        sys.execv(sys.executable, ['python'] + sys.argv)
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def sync(self, ctx):
         """Sync slash commands to all servers (owner or developer only)."""
         synced = await self.bot.tree.sync()
         await ctx.send(f"Synced {len(synced)} commands globally.")
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def load(self, ctx, extension: str):
         """Load a cog (owner or developer only)."""
         try:
@@ -54,7 +53,7 @@ class BotManagement(commands.Cog):
             await ctx.send(f"Error loading cog: {e}")
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def unload(self, ctx, extension: str):
         """Unload a cog (owner or developer only)."""
         try:
@@ -64,7 +63,7 @@ class BotManagement(commands.Cog):
             await ctx.send(f"Error unloading cog: {e}")
 
     @commands.hybrid_command()
-    @is_developer_or_owner()
+    @commands.check(lambda self, ctx: self.is_developer_or_owner(ctx.author.id))
     async def reload(self, ctx, extension: str):
         """Reload a cog (owner or developer only)."""
         try:

@@ -2,7 +2,7 @@
 import discord
 from discord.ext import commands, tasks
 import os
-from dotenv import load_dotenv
+import json
 
 async def load_cogs(bot):
     from pathlib import Path
@@ -20,40 +20,35 @@ async def load_cogs(bot):
 intents = discord.Intents.default()
 intents.message_content = True
 
-load_dotenv()
+# Load config.json
+with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
+    config = json.load(f)
 
 # Show startup message if allowed
-if os.getenv('CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED', 'true').lower() == 'true':
+if config.get('CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED', True):
     print('---------------------------------------')
     print('AETHERX BOT BASEPLATE')
     print('---------------------------------------')
 
 # Utility: Check if a user is a developer or owner (matches custom check)
 def is_developer_or_owner_id(user_id):
-    owner_ids = os.getenv('BOT_OWNERS', '')
-    developer_ids = os.getenv('BOT_DEVELOPERS', '')
-    all_ids = set()
-    for id_str in owner_ids.split(',') + developer_ids.split(','):
-        id_str = id_str.strip()
-        if id_str.isdigit():
-            all_ids.add(int(id_str))
+    owner_ids = config.get('BOT_OWNERS', [])
+    developer_ids = config.get('BOT_DEVELOPERS', [])
+    all_ids = set(owner_ids + developer_ids)
     return user_id in all_ids
 
-# Get command prefix from environment, default to '!'
+# Get command prefix from config, default to '!'
 def get_prefix(bot, message):
-    prefix = os.getenv('BOT_PREFIX', '!').strip()
+    prefix = config.get('BOT_PREFIX', '!').strip()
     return commands.when_mentioned_or(prefix)(bot, message)
 
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
+bot.config = config  # Attach config to bot for cogs to use
 
 def get_presence():
-    # To remove all variables loaded by dotenv (if you know their names)
-    for var in ['BOT_ACTIVITY_TYPE', 'BOT_ACTIVITY', 'BOT_STATUS']:
-        os.environ.pop(var, None)
-    load_dotenv()
-    activity_type = os.getenv('BOT_ACTIVITY_TYPE', 'playing').lower()
-    activity_name = os.getenv('BOT_ACTIVITY', 'with code')
-    status_str = os.getenv('BOT_STATUS', 'online').lower()
+    activity_type = config.get('BOT_ACTIVITY_TYPE', 'playing').lower()
+    activity_name = config.get('BOT_ACTIVITY', 'with code')
+    status_str = config.get('BOT_STATUS', 'online').lower()
 
     if activity_type == 'playing':
         activity = discord.Game(name=activity_name)
@@ -90,9 +85,9 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     await load_cogs(bot)
 
-# use an environment variable
-TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-if TOKEN is None:
-    raise ValueError("No Bot Token provided. Set the DISCORD_BOT_TOKEN environment variable.")
+# use config for token
+TOKEN = config.get('DISCORD_BOT_TOKEN')
+if not TOKEN:
+    raise ValueError("No Bot Token provided. Set the DISCORD_BOT_TOKEN in config.json.")
 
 bot.run(TOKEN)

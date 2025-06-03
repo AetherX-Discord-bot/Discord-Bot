@@ -6,6 +6,7 @@ class Moderation(commands.Cog):
     """A cog to handle moderation commands like kick, ban, and clear messages."""
     def __init__(self, bot: Bot):
         self.bot = bot
+        self.config = getattr(bot, 'config', {})
 
     @commands.hybrid_command()
     @has_permissions(kick_members=True)
