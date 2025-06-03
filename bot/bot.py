@@ -20,6 +20,25 @@ async def load_cogs(bot):
 intents = discord.Intents.default()
 intents.message_content = True
 
+load_dotenv()
+
+# Show startup message if allowed
+if os.getenv('CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED', 'true').lower() == 'true':
+    print('---------------------------------------')
+    print('AETHERX BOT BASEPLATE')
+    print('---------------------------------------')
+
+# Utility: Check if a user is a developer or owner (matches custom check)
+def is_developer_or_owner_id(user_id):
+    owner_ids = os.getenv('BOT_OWNERS', '')
+    developer_ids = os.getenv('BOT_DEVELOPERS', '')
+    all_ids = set()
+    for id_str in owner_ids.split(',') + developer_ids.split(','):
+        id_str = id_str.strip()
+        if id_str.isdigit():
+            all_ids.add(int(id_str))
+    return user_id in all_ids
+
 # Get command prefix from environment, default to '!'
 def get_prefix(bot, message):
     prefix = os.getenv('BOT_PREFIX', '!').strip()
@@ -27,9 +46,11 @@ def get_prefix(bot, message):
 
 bot = commands.Bot(command_prefix=get_prefix, intents=intents)
 
-load_dotenv()
-
 def get_presence():
+    # To remove all variables loaded by dotenv (if you know their names)
+    for var in ['BOT_ACTIVITY_TYPE', 'BOT_ACTIVITY', 'BOT_STATUS']:
+        os.environ.pop(var, None)
+    load_dotenv()
     activity_type = os.getenv('BOT_ACTIVITY_TYPE', 'playing').lower()
     activity_name = os.getenv('BOT_ACTIVITY', 'with code')
     status_str = os.getenv('BOT_STATUS', 'online').lower()

@@ -6,7 +6,7 @@ class Moderation(commands.Cog):
     def __init__(self, bot: Bot):
         self.bot = bot
 
-    @commands.command()
+    @commands.hybrid_command()
     @has_permissions(kick_members=True)
     async def kick(self, ctx: Context, member: discord.Member, *, reason: str = None):
         """Kick a member from the server."""
@@ -16,7 +16,7 @@ class Moderation(commands.Cog):
         except Exception as e:
             await ctx.send(f"Failed to kick {member.mention}: {e}")
 
-    @commands.command()
+    @commands.hybrid_command()
     @has_permissions(ban_members=True)
     async def ban(self, ctx: Context, member: discord.Member, *, reason: str = None):
         """Ban a member from the server."""
@@ -26,7 +26,7 @@ class Moderation(commands.Cog):
         except Exception as e:
             await ctx.send(f"Failed to ban {member.mention}: {e}")
 
-    @commands.command()
+    @commands.hybrid_command()
     @has_permissions(manage_messages=True)
     async def clear(self, ctx: Context, amount: int = 5):
         """Clear a number of messages from the channel (default 5)."""
