@@ -1,4 +1,4 @@
-This may be out of date, to see the updated version, go to the website
+This may be out of date, to see the updated version, go to the website [here](https://aetherx-discord-bot.github.io/web/)
 
 # AetherX Bot 🤖  
 *A multipurpose Discord bot packed with mini-games, utilities, and fun!*
@@ -112,7 +112,7 @@ Follow these steps to run AetherX Bot on your server:
 We appreciate your support! Check out our [Donations Page](DONATIONS.md) to learn how you can contribute.
 
 ### Modifying
-go to [How to mod](./modification.md/#-setup)
+Go to [How to mod](./modification.md/#-setup)
 
 ### Contributing
-go to [How to contribute](./modification.md/#-contributing)
+Go to [How to contribute](./modification.md/#-contributing)
