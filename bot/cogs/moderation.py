@@ -3,6 +3,7 @@ from discord.ext import commands
 from discord.ext.commands import has_permissions, Bot, Context
 
 class Moderation(commands.Cog):
+    """A cog to handle moderation commands like kick, ban, and clear messages."""
     def __init__(self, bot: Bot):
         self.bot = bot
 

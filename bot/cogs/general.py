@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 
 class General(commands.Cog):
+    """A cog to handle general commands like ping, info, avatar, and banner."""
     def __init__(self, bot):
         self.bot = bot
 

@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 
 class Games(commands.Cog):
+    """A cog to handle various games like coinflip, roll, and blackjack."""
     def __init__(self, bot):
         self.bot = bot
 

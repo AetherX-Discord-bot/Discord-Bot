@@ -18,6 +18,7 @@ def is_developer_or_owner():
     return commands.check(predicate)
 
 class BotManagement(commands.Cog):
+    """A cog to manage the bot, including shutdown, restart, and cog management."""
     def __init__(self, bot):
         self.bot = bot
 
