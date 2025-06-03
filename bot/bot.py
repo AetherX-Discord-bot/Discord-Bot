@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands, tasks
 import os
 import json
+import asyncio
 
 async def load_cogs(bot):
     from pathlib import Path
@@ -42,9 +43,6 @@ def get_prefix(bot, message):
     prefix = config.get('BOT_PREFIX', '!').strip()
     return commands.when_mentioned_or(prefix)(bot, message)
 
-bot = commands.Bot(command_prefix=get_prefix, intents=intents)
-bot.config = config  # Attach config to bot for cogs to use
-
 def get_presence():
     activity_type = config.get('BOT_ACTIVITY_TYPE', 'playing').lower()
     activity_name = config.get('BOT_ACTIVITY', 'with code')
@@ -74,20 +72,28 @@ def get_presence():
         status = discord.Status.invisible
     return activity, status
 
-@tasks.loop(seconds=30)
-async def update_presence():
-    activity, status = get_presence()
-    await bot.change_presence(activity=activity, status=status)
+async def start_bot(token):
+    bot = commands.Bot(command_prefix=get_prefix, intents=intents)
+    bot.config = config
+    async def update_presence():
+        while True:
+            activity, status = get_presence()
+            await bot.change_presence(activity=activity, status=status)
+            await asyncio.sleep(30)
+    async def on_ready():
+        bot.loop.create_task(update_presence())
+        print(f'Logged in as {bot.user}')
+        await load_cogs(bot)
+    bot.event(on_ready)
+    await bot.start(token)
 
-@bot.event
-async def on_ready():
-    update_presence.start()
-    print(f'Logged in as {bot.user}')
-    await load_cogs(bot)
+async def main():
+    TOKENS = config.get('DISCORD_BOT_TOKEN')
+    if isinstance(TOKENS, str):
+        TOKENS = [TOKENS] if TOKENS else []
+    if not TOKENS:
+        raise ValueError("No Bot Token provided. Set the DISCORD_BOT_TOKEN in config.json.")
+    await asyncio.gather(*(start_bot(token) for token in TOKENS))
 
-# use config for token
-TOKEN = config.get('DISCORD_BOT_TOKEN')
-if not TOKEN:
-    raise ValueError("No Bot Token provided. Set the DISCORD_BOT_TOKEN in config.json.")
-
-bot.run(TOKEN)
+if __name__ == "__main__":
+    asyncio.run(main())
