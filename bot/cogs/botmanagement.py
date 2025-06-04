@@ -85,7 +85,7 @@ class BotManagement(commands.Cog):
         embed.set_footer(text=f"Total servers: {len(guilds)}")
         await ctx.send(embed=embed)
 
-    @commands.hybrid_command(name="serverdetails", aliases=["guilddetails"]) 
+    @commands.hybrid_command(aliases=["guilddetails"]) 
     @is_developer_or_owner()
     async def serverdetails(self, ctx, server_id: int):
         """Show detailed info about a server by its ID."""
@@ -104,6 +104,20 @@ class BotManagement(commands.Cog):
         embed.add_field(name="Channels", value=len(guild.channels))
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
+
+    @commands.hybrid_command(aliases=["forceleave", "kickself"])
+    @is_developer_or_owner()
+    async def forceremovebot(self, ctx, server_id: int):
+        """Force the bot to leave a server by its ID."""
+        guild = discord.utils.get(self.bot.guilds, id=server_id)
+        if not guild:
+            await ctx.send(f"I'm not in a server with ID {server_id}.")
+            return
+        try:
+            await guild.leave()
+            await ctx.send(f"Successfully left the server: {guild.name} (ID: {guild.id})")
+        except Exception as e:
+            await ctx.send(f"Failed to leave the server: {e}")
 
 async def setup(bot):
     await bot.add_cog(BotManagement(bot))
