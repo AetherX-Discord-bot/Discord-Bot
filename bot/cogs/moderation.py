@@ -36,7 +36,7 @@ class Moderation(commands.Cog):
         await ctx.send(f"Deleted {len(deleted)-1} messages.", delete_after=3)
 
     @commands.hybrid_command()
-    @has_permissions(manage_server=True)
+    @has_permissions(manage_guild=True)
     async def remove_bot(self, ctx: Context):
         """Remove the bot from the server."""
         if ctx.guild.me.guild_permissions.administrator:

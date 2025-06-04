@@ -79,8 +79,31 @@ class BotManagement(commands.Cog):
         if not guilds:
             await ctx.send("I'm not in any servers!")
             return
-        server_list = '\n'.join(f"{g.name} (ID: {g.id})" for g in guilds)
-        await ctx.send(f"I'm in {len(guilds)} servers:\n{server_list}")
+        embed = discord.Embed(title="Servers I'm In", color=discord.Color.blue())
+        for g in guilds:
+            embed.add_field(name=g.name, value=f"ID: {g.id}", inline=False)
+        embed.set_footer(text=f"Total servers: {len(guilds)}")
+        await ctx.send(embed=embed)
+
+    @commands.hybrid_command(name="serverdetails", aliases=["guilddetails"]) 
+    @is_developer_or_owner()
+    async def serverdetails(self, ctx, server_id: int):
+        """Show detailed info about a server by its ID."""
+        guild = discord.utils.get(self.bot.guilds, id=server_id)
+        if not guild:
+            await ctx.send(f"I'm not in a server with ID {server_id}.")
+            return
+        owner = guild.owner or await self.bot.fetch_user(guild.owner_id)
+        embed = discord.Embed(title=f"Server Details: {guild.name}", color=discord.Color.purple())
+        embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
+        embed.add_field(name="Server ID", value=guild.id)
+        embed.add_field(name="Owner", value=f"{owner} ({owner.id})")
+        embed.add_field(name="Members", value=guild.member_count)
+        embed.add_field(name="Created At", value=guild.created_at.strftime('%Y-%m-%d %H:%M:%S'))
+        embed.add_field(name="Boosts", value=guild.premium_subscription_count)
+        embed.add_field(name="Channels", value=len(guild.channels))
+        embed.set_footer(text=f"Requested by {ctx.author}")
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(BotManagement(bot))

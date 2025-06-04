@@ -67,5 +67,24 @@ class General(commands.Cog):
         else:
             await ctx.send(f"{user} does not have a banner set.")
 
+    @commands.hybrid_command(name="serverinfo")
+    async def serverinfo(self, ctx):
+        """Show info about the current server."""
+        guild = ctx.guild
+        if not guild:
+            await ctx.send("This command can only be used in a server.")
+            return
+        owner = guild.owner or await self.bot.fetch_user(guild.owner_id)
+        embed = discord.Embed(title=f"Server Info: {guild.name}", color=discord.Color.green())
+        embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
+        embed.add_field(name="Server ID", value=guild.id)
+        embed.add_field(name="Owner", value=f"{owner} ({owner.id})")
+        embed.add_field(name="Members", value=guild.member_count)
+        embed.add_field(name="Created At", value=guild.created_at.strftime('%Y-%m-%d %H:%M:%S'))
+        embed.add_field(name="Boosts", value=guild.premium_subscription_count)
+        embed.add_field(name="Channels", value=len(guild.channels))
+        embed.set_footer(text=f"Requested by {ctx.author}")
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(General(bot))
