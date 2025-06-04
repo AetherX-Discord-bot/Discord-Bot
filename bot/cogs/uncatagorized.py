@@ -72,10 +72,12 @@ class Uncatagorized(commands.Cog):
                     await ctx.send(embed=embed)
                     return
                 else:
-                    await ctx.send(f"No commands available in cog '{arg}' for you.")
+                    embed = discord.Embed(description=f"No commands available in cog '{arg}' for you.", color=discord.Color.red())
+                    await ctx.send(embed=embed)
                     return
             else:
-                await ctx.send(f"Cog '{arg}' not found.")
+                embed = discord.Embed(description=f"Cog '{arg}' not found.", color=discord.Color.red())
+                await ctx.send(embed=embed)
                 return
         # Default: Show all cogs with at least one command the user can run
         embed.description = "Select a category below to see its commands. Use `!help <cog>` to view commands in a category."

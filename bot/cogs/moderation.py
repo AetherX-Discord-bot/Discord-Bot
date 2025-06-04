@@ -14,9 +14,11 @@ class Moderation(commands.Cog):
         """Kick a member from the server."""
         try:
             await member.kick(reason=reason)
-            await ctx.send(f"{member.mention} has been kicked. Reason: {reason if reason else 'No reason provided.'}")
+            embed = discord.Embed(description=f"{member.mention} has been kicked. Reason: {reason if reason else 'No reason provided.'}", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to kick {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to kick {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command()
     @has_permissions(ban_members=True)
@@ -24,68 +26,83 @@ class Moderation(commands.Cog):
         """Ban a member from the server."""
         try:
             await member.ban(reason=reason)
-            await ctx.send(f"{member.mention} has been banned. Reason: {reason if reason else 'No reason provided.'}")
+            embed = discord.Embed(description=f"{member.mention} has been banned. Reason: {reason if reason else 'No reason provided.'}", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to ban {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to ban {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command()
     @has_permissions(manage_messages=True)
     async def clear(self, ctx: Context, amount: int = 5):
         """Clear a number of messages from the channel (default 5)."""
         deleted = await ctx.channel.purge(limit=amount+1)  # +1 to include the command message
-        await ctx.send(f"Deleted {len(deleted)-1} messages.", delete_after=3)
+        embed = discord.Embed(description=f"Deleted {len(deleted)-1} messages.", color=discord.Color.orange())
+        await ctx.send(embed=embed, delete_after=3)
 
     @commands.hybrid_command()
     @has_permissions(manage_guild=True)
     async def remove_bot(self, ctx: Context):
         """Remove the bot from the server."""
         if ctx.guild.me.guild_permissions.administrator:
-            await ctx.send("I cannot remove myself from this server as I have administrator permissions.")
+            embed = discord.Embed(description="I cannot remove myself from this server as I have administrator permissions.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
         try:
             await ctx.guild.leave()
-            await ctx.send("I have left the server.")
+            embed = discord.Embed(description="I have left the server.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to leave the server: {e}")
+            embed = discord.Embed(description=f"Failed to leave the server: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(hidden=True)
     @has_permissions(manage_guild=True)
     async def ban_bot(self, ctx: Context):
         """Ban the bot from the server."""
         if ctx.guild.me.guild_permissions.administrator:
-            await ctx.send("I cannot ban myself from this server as I have administrator permissions.")
+            embed = discord.Embed(description="I cannot ban myself from this server as I have administrator permissions.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
         try:
             await ctx.guild.ban(ctx.guild.me, reason="Bot banned by command.")
-            await ctx.send("I have been banned from the server, f u n n y  t i m e")
+            embed = discord.Embed(description="I have been banned from the server, f u n n y  t i m e", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to ban the bot: {e}")
+            embed = discord.Embed(description=f"Failed to ban the bot: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['chillchat', 'chill'])
     @has_permissions(manage_channels=True)
     async def slowmode(self, ctx: Context, seconds: int = 0):
         """Set the slowmode for the channel in seconds (0 to disable)."""
         if seconds < 0:
-            await ctx.send("Slowmode cannot be set to a negative value.")
+            embed = discord.Embed(description="Slowmode cannot be set to a negative value.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
         elif seconds > 21600:  # 6 hours
-            await ctx.send("Slowmode cannot be set to more than 6 hours (21600 seconds). \n-# This is a Discord limitation, and i added this to prevent my broken code from breaking my terminal.")
+            embed = discord.Embed(description="Slowmode cannot be set to more than 6 hours (21600 seconds). \n-# This is a Discord limitation, and i added this to prevent my broken code from breaking my terminal.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
         try:
             await ctx.channel.edit(slowmode_delay=seconds)
-            await ctx.send(f"Slowmode set to {seconds} seconds.")
+            embed = discord.Embed(description=f"Slowmode set to {seconds} seconds.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to set slowmode: {e}")
-    
+            embed = discord.Embed(description=f"Failed to set slowmode: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
+
     @commands.hybrid_command(aliases=['lock'])
     @has_permissions(manage_channels=True)
     async def lock_channel(self, ctx: Context):
         """Lock the current channel so only admins can send messages."""
         try:
             await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False)
-            await ctx.send(f"{ctx.channel.mention} has been locked.")
+            embed = discord.Embed(description=f"{ctx.channel.mention} has been locked.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to lock the channel: {e}")
+            embed = discord.Embed(description=f"Failed to lock the channel: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['unlock'])
     @has_permissions(manage_channels=True)
@@ -93,18 +110,20 @@ class Moderation(commands.Cog):
         """Unlock the current channel so everyone can send messages."""
         try:
             await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=True)
-            await ctx.send(f"{ctx.channel.mention} has been unlocked.")
+            embed = discord.Embed(description=f"{ctx.channel.mention} has been unlocked.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to unlock the channel: {e}")
+            embed = discord.Embed(description=f"Failed to unlock the channel: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['mute'])
     @has_permissions(mute_members=True)
     async def mute_member(self, ctx: Context, member: discord.Member, *, reason: str = None):
         """Mute a member in the server."""
         if not ctx.guild.me.guild_permissions.manage_roles:
-            await ctx.send("I do not have permission to manage roles.")
+            embed = discord.Embed(description="I do not have permission to manage roles.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
-        
         mute_role = discord.utils.get(ctx.guild.roles, name="Muted")
         if not mute_role:
             try:
@@ -112,61 +131,69 @@ class Moderation(commands.Cog):
                 for channel in ctx.guild.channels:
                     await channel.set_permissions(mute_role, send_messages=False, speak=False)
             except Exception as e:
-                await ctx.send(f"Failed to create mute role: {e}")
+                embed = discord.Embed(description=f"Failed to create mute role: {e}", color=discord.Color.red())
+                await ctx.send(embed=embed)
                 return
-        
         try:
             await member.add_roles(mute_role, reason=reason)
-            await ctx.send(f"{member.mention} has been muted. Reason: {reason if reason else 'No reason provided.'}")
+            embed = discord.Embed(description=f"{member.mention} has been muted. Reason: {reason if reason else 'No reason provided.'}", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to mute {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to mute {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['unmute'])
     @has_permissions(mute_members=True)
     async def unmute_member(self, ctx: Context, member: discord.Member):
         """Unmute a member in the server."""
         if not ctx.guild.me.guild_permissions.manage_roles:
-            await ctx.send("I do not have permission to manage roles.")
+            embed = discord.Embed(description="I do not have permission to manage roles.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
-        
         mute_role = discord.utils.get(ctx.guild.roles, name="Muted")
         if not mute_role:
-            await ctx.send("There is no 'Muted' role in this server.")
+            embed = discord.Embed(description="There is no 'Muted' role in this server.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
-        
         try:
             await member.remove_roles(mute_role, reason="Unmuted by moderation command.")
-            await ctx.send(f"{member.mention} has been unmuted.")
+            embed = discord.Embed(description=f"{member.mention} has been unmuted.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to unmute {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to unmute {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['timeout', 'tempmute'])
     @has_permissions(moderate_members=True)
     async def timeout_member(self, ctx: Context, member: discord.Member, duration: int, *, reason: str = None):
         """Timeout a member for a specified duration in seconds."""
         if not ctx.guild.me.guild_permissions.moderate_members:
-            await ctx.send("I do not have permission to moderate members.")
+            embed = discord.Embed(description="I do not have permission to moderate members.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
-        
         try:
             await member.timeout(duration=duration, reason=reason)
-            await ctx.send(f"{member.mention} has been timed out for {duration} seconds. Reason: {reason if reason else 'No reason provided.'}")
+            embed = discord.Embed(description=f"{member.mention} has been timed out for {duration} seconds. Reason: {reason if reason else 'No reason provided.'}", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to timeout {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to timeout {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(aliases=['untimeout', 'untimemute'])
     @has_permissions(moderate_members=True)
     async def untimeout_member(self, ctx: Context, member: discord.Member):
         """Remove timeout from a member."""
         if not ctx.guild.me.guild_permissions.moderate_members:
-            await ctx.send("I do not have permission to moderate members.")
+            embed = discord.Embed(description="I do not have permission to moderate members.", color=discord.Color.red())
+            await ctx.send(embed=embed)
             return
-        
         try:
             await member.timeout(None, reason="Timeout removed by moderation command.")
-            await ctx.send(f"{member.mention} has been removed from timeout.")
+            embed = discord.Embed(description=f"{member.mention} has been removed from timeout.", color=discord.Color.orange())
+            await ctx.send(embed=embed)
         except Exception as e:
-            await ctx.send(f"Failed to remove timeout from {member.mention}: {e}")
+            embed = discord.Embed(description=f"Failed to remove timeout from {member.mention}: {e}", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
 async def setup(bot: Bot):
     await bot.add_cog(Moderation(bot))

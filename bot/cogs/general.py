@@ -10,7 +10,8 @@ class General(commands.Cog):
     @commands.hybrid_command()
     async def ping(self, ctx):
         latency = round(self.bot.latency * 1000)  # ms
-        await ctx.send(f'Pong! Latency: {latency}ms')
+        embed = discord.Embed(description=f'Pong! Latency: {latency}ms', color=discord.Color.green())
+        await ctx.send(embed=embed)
 
     @commands.hybrid_command()
     async def info(self, ctx):
@@ -65,7 +66,8 @@ class General(commands.Cog):
             embed.set_image(url=banner_url)
             await ctx.send(embed=embed)
         else:
-            await ctx.send(f"{user} does not have a banner set.")
+            embed = discord.Embed(description=f"{user} does not have a banner set.", color=discord.Color.red())
+            await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="serverinfo")
     async def serverinfo(self, ctx):
