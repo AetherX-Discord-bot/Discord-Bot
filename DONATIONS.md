@@ -17,7 +17,7 @@ By donating, you directly support:
 ## How to Donate
 
 You can support us through the following platforms:
-- [Cashapp] Not avalible yet
+- [Cashapp](https://cash.app/$androgalaxi)
 
 ### Other Ways to Support
 
