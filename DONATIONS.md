@@ -18,6 +18,7 @@ By donating, you directly support:
 
 You can support us through the following platforms:
 - [Cashapp](https://cash.app/$androgalaxi)
+- [Github Sponsers](https://github.com/sponsors/AetherX-Discord-bot)
 
 ### Other Ways to Support
 
