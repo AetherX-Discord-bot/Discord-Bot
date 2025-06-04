@@ -7,7 +7,7 @@ class Uncatagorized(commands.Cog):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
 
-    @commands.hybrid_command(name="help", with_app_command=True, description="Show help for all cogs or commands.")
+    @commands.hybrid_command(name="help", description="Show help for all cogs or commands.", hidden=True)
     async def help(self, ctx, *, arg: str = None):
         """Show help for all cogs or commands available to the user. Use '!help <cog>' to see commands in a cog, or '!help list' for all commands."""
         embed = discord.Embed(

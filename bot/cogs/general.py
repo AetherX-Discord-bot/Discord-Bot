@@ -88,5 +88,36 @@ class General(commands.Cog):
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
 
+    @commands.hybrid_command(name="feedback")
+    async def feedback(self, ctx, *, message: str = None):
+        """Send feedback to the bot owner. Attach files or paste Tenor links!"""
+        if not message and not ctx.message.attachments:
+            await ctx.send("Please provide feedback text or an attachment.")
+            return
+        feedback_channel_id = 1342534739193757848
+        feedback_channel = self.bot.get_channel(feedback_channel_id)
+        if not feedback_channel:
+            feedback_channel = await self.bot.fetch_channel(feedback_channel_id)
+        # Prepare message content
+        content = f"Feedback from {ctx.author} ({ctx.author.id}):\n{message or '(No text)'}"
+        # Attachments from message
+        files = []
+        for attachment in ctx.message.attachments:
+            files.append(await attachment.to_file())
+        # Tenor links as regular messages in feedback channel
+        tenor_links = []
+        if message:
+            import re
+            tenor_links = re.findall(r"https?://tenor\\.com/view/\\S+", message)
+        # Remove Tenor links from the content
+        if tenor_links:
+            for link in tenor_links:
+                content = content.replace(link, "").strip()
+        await feedback_channel.send(content, files=files)
+        # Send Tenor links as regular messages in the feedback channel
+        for link in tenor_links:
+            await feedback_channel.send(f"Tenor GIF from {ctx.author} ({ctx.author.id}): {link}")
+        await ctx.send("Thank you for your feedback!")
+
 async def setup(bot):
     await bot.add_cog(General(bot))
