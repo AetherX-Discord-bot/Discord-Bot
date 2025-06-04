@@ -29,9 +29,19 @@ jobs:
         run: |
           zip -r discord-bot-${{ github.ref_name }}.zip bot
 
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          if [[ "${GITHUB_REF_NAME}" =~ ^v0\.[0-9]+\.[0-9]+$ ]]; then
+            echo "IS_PRERELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "IS_PRERELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: discord-bot-${{ github.ref_name }}.zip
+          prerelease: ${{ steps.prerelease.outputs.IS_PRERELEASE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
