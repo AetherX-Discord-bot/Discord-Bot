@@ -35,5 +35,31 @@ class Moderation(commands.Cog):
         deleted = await ctx.channel.purge(limit=amount+1)  # +1 to include the command message
         await ctx.send(f"Deleted {len(deleted)-1} messages.", delete_after=3)
 
+    @commands.hybrid_command()
+    @has_permissions(manage_server=True)
+    async def remove_bot(self, ctx: Context):
+        """Remove the bot from the server."""
+        if ctx.guild.me.guild_permissions.administrator:
+            await ctx.send("I cannot remove myself from this server as I have administrator permissions.")
+            return
+        try:
+            await ctx.guild.leave()
+            await ctx.send("I have left the server.")
+        except Exception as e:
+            await ctx.send(f"Failed to leave the server: {e}")
+
+    @commands.hybrid_command(hidden=True)
+    @has_permissions(manage_guild=True)
+    async def ban_bot(self, ctx: Context):
+        """Ban the bot from the server."""
+        if ctx.guild.me.guild_permissions.administrator:
+            await ctx.send("I cannot ban myself from this server as I have administrator permissions.")
+            return
+        try:
+            await ctx.guild.ban(ctx.guild.me, reason="Bot banned by command.")
+            await ctx.send("I have been banned from the server, f u n n y  t i m e")
+        except Exception as e:
+            await ctx.send(f"Failed to ban the bot: {e}")
+
 async def setup(bot: Bot):
     await bot.add_cog(Moderation(bot))
