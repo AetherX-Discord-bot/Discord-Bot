@@ -68,6 +68,9 @@ class Moderation(commands.Cog):
         if seconds < 0:
             await ctx.send("Slowmode cannot be set to a negative value.")
             return
+        elif seconds > 21600:  # 6 hours
+            await ctx.send("Slowmode cannot be set to more than 6 hours (21600 seconds). \n-# This is a Discord limitation, and i added this to prevent my broken code from breaking my terminal.")
+            return
         try:
             await ctx.channel.edit(slowmode_delay=seconds)
             await ctx.send(f"Slowmode set to {seconds} seconds.")
