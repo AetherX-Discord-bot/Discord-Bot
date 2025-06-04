@@ -9,5 +9,12 @@
   "BOT_WEBSITE": "https://aetherx-discord-bot.github.io",
   "BOT_SUPPORT_SERVER": "https://discord.gg/yFY8Fnbtp9",
   "BOT_INVITE_URL": "https://discord.com/api/oauth2/authorize?client_id=1067646246254284840&permissions=8&scope=bot%20applications.commands",
-  "CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED": true
+  "CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED": true,
+  "AUTOMATIC_UPDATES": true,
+  "AUTOMATIC_UPDATES_CHANNEL": "stable",
+  "GITHUB_REPOSITORY_URL": "https://github.dev/AetherX-Discord-bot/Discord-Bot",
+  "LOAD_ALL_COGS": true,
+  "COG WHITELIST": [],
+  "COG BLACKLIST": ["music"],
+  "BYPASS_FORCED_BOTMANAGEMENT.PY": false
 }

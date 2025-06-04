@@ -5,6 +5,16 @@ import os
 import json
 import asyncio
 
+# Load config.json
+with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
+    config = json.load(f)
+
+# Cog loading config
+COG_WHITELIST = config.get('COG WHITELIST', [])
+COG_BLACKLIST = config.get('COG BLACKLIST', [])
+LOAD_ALL_COGS = config.get('LOAD_ALL_COGS', True)
+BYPASS_FORCED_BOTMANAGEMENT_PY = config.get('BYPASS_FORCED_BOTMANAGEMENT.PY', False)
+
 async def load_cogs(bot):
     from pathlib import Path
     import importlib
@@ -12,18 +22,25 @@ async def load_cogs(bot):
     for file in cogs_dir.glob('*.py'):
         if file.name.startswith('_'):
             continue
+        if file.stem in COG_BLACKLIST:
+            continue
+        if file.stem == 'botmanagement' and not BYPASS_FORCED_BOTMANAGEMENT_PY:
+            # Always load botmanagement.py unless bypass is enabled
+            try:
+                await bot.load_extension('cogs.botmanagement')
+            except Exception as e:
+                print(f'Failed to load cog cogs.botmanagement: {e}')
+            continue
         cog_name = f"cogs.{file.stem}"
-        try:
-            await bot.load_extension(cog_name)
-        except Exception as e:
-            print(f'Failed to load cog {cog_name}: {e}')
+        # Only load cogs if LOAD_ALL_COGS is True or cog is in whitelist
+        if LOAD_ALL_COGS or file.stem in COG_WHITELIST:
+            try:
+                await bot.load_extension(cog_name)
+            except Exception as e:
+                print(f'Failed to load cog {cog_name}: {e}')
 
 intents = discord.Intents.default()
 intents.message_content = True
-
-# Load config.json
-with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
-    config = json.load(f)
 
 # Show startup message if allowed
 if config.get('CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED', True):
@@ -51,7 +68,9 @@ def get_presence():
     if activity_type == 'playing':
         activity = discord.Game(name=activity_name)
     elif activity_type == 'streaming':
-        activity = discord.Streaming(name=activity_name, url='https://twitch.tv/yourchannel')
+        # Use a configurable streaming URL or mark this as a placeholder
+        streaming_url = config.get('BOT_STREAMING_URL', 'https://example.com/stream')  # Placeholder URL
+        activity = discord.Streaming(name=activity_name, url=streaming_url)
     elif activity_type == 'listening':
         activity = discord.Activity(type=discord.ActivityType.listening, name=activity_name)
     elif activity_type == 'watching':
@@ -60,6 +79,8 @@ def get_presence():
         activity = discord.Activity(type=discord.ActivityType.competing, name=activity_name)
     elif activity_type == 'custom':
         activity = discord.CustomActivity(name=activity_name)
+    elif activity_type == 'none':
+        activity = None
     else:
         activity = discord.Game(name=activity_name)
 
