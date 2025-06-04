@@ -79,6 +79,7 @@ class Uncatagorized(commands.Cog):
                 return
         # Default: Show all cogs with at least one command the user can run
         embed.description = "Select a category below to see its commands. Use `!help <cog>` to view commands in a category."
+        max_per_cog = 4
         for cog_name, cog in self.bot.cogs.items():
             commands_list = []
             for cmd in cog.get_commands():
@@ -90,9 +91,11 @@ class Uncatagorized(commands.Cog):
                         continue
             if commands_list:
                 cog_desc = getattr(cog, '__doc__', None) or "No description."
+                shown_cmds = commands_list[:max_per_cog]
+                more = f" (+{len(commands_list) - max_per_cog} more...)" if len(commands_list) > max_per_cog else ""
                 embed.add_field(
                     name=f"{getattr(cog, 'qualified_name', cog_name)}",
-                    value=f"{cog_desc}\nCommands: {', '.join(commands_list)}",
+                    value=f"{cog_desc}\nCommands: {', '.join(shown_cmds)}{more}",
                     inline=False
                 )
         # Also include uncategorized commands (not in a cog)
@@ -105,7 +108,9 @@ class Uncatagorized(commands.Cog):
                 except Exception:
                     continue
         if uncategorized:
-            embed.add_field(name="Other", value=f"Commands: {', '.join(uncategorized)}", inline=False)
+            shown_uncat = uncategorized[:max_per_cog]
+            more = f" (+{len(uncategorized) - max_per_cog} more...)" if len(uncategorized) > max_per_cog else ""
+            embed.add_field(name="Other", value=f"Commands: {', '.join(shown_uncat)}{more}", inline=False)
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
 

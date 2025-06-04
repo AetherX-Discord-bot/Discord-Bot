@@ -61,7 +61,7 @@ class Moderation(commands.Cog):
         except Exception as e:
             await ctx.send(f"Failed to ban the bot: {e}")
 
-    @commands.hybrid_command(aliases=['slowmode'])
+    @commands.hybrid_command(aliases=['chillchat', 'chill'])
     @has_permissions(manage_channels=True)
     async def slowmode(self, ctx: Context, seconds: int = 0):
         """Set the slowmode for the channel in seconds (0 to disable)."""
