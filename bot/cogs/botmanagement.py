@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 import sys
+import sqlite3
+import os
 
 def is_developer_or_owner():
     async def predicate(ctx):
@@ -18,6 +20,29 @@ class BotManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
+        self.db_path = os.path.join(os.path.dirname(__file__), '../data/database.db')
+
+    def is_server_whitelisted(self, server_id):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute("SELECT whitelisted_status FROM servers WHERE server_id = ?", (server_id,))
+            row = c.fetchone()
+            conn.close()
+            return bool(row and row[0])
+        except Exception:
+            return False
+
+    def is_server_blacklisted(self, server_id):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute("SELECT blacklisted_status FROM servers WHERE server_id = ?", (server_id,))
+            row = c.fetchone()
+            conn.close()
+            return bool(row and row[0])
+        except Exception:
+            return False
 
     @commands.command(aliases=["die", "exit", "quit", "close", "terminate"])
     @commands.is_owner()
