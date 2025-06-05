@@ -19,14 +19,14 @@ class BotManagement(commands.Cog):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
 
-    @commands.hybrid_command(aliases=["die", "exit", "quit", "close", "terminate"])
+    @commands.command(aliases=["die", "exit", "quit", "close", "terminate"])
     @commands.is_owner()
     async def shutdown(self, ctx):
         """Shut down the bot (owner only)."""
         await ctx.send("Shutting down...")
         await self.bot.close()
 
-    @commands.hybrid_command(aliases=["restartbot", "reboot", "relaunch", "reloadbot"])
+    @commands.command(aliases=["restartbot", "reboot", "relaunch", "reloadbot"])
     @is_developer_or_owner()
     async def restart(self, ctx):
         """Restart the bot."""
@@ -34,14 +34,14 @@ class BotManagement(commands.Cog):
         import os
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
-    @commands.hybrid_command(aliases=["synccommands", "syncslash", "syncglobal"])
+    @commands.command(aliases=["synccommands", "syncslash", "syncglobal"])
     @is_developer_or_owner()
     async def sync(self, ctx):
         """Sync slash commands to all servers."""
         synced = await self.bot.tree.sync()
         await ctx.send(f"Synced {len(synced)} commands globally.")
 
-    @commands.hybrid_command(aliases=["loadcog", "loadextension"])
+    @commands.command(aliases=["loadcog", "loadextension"])
     @is_developer_or_owner()
     async def load(self, ctx, extension: str):
         """Load a cog."""
@@ -51,7 +51,7 @@ class BotManagement(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error loading cog: {e}")
 
-    @commands.hybrid_command(aliases=["unloadcog", "unloadextension"])
+    @commands.command(aliases=["unloadcog", "unloadextension"])
     @is_developer_or_owner()
     async def unload(self, ctx, extension: str):
         """Unload a cog."""
@@ -61,7 +61,7 @@ class BotManagement(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error unloading cog: {e}")
 
-    @commands.hybrid_command(aliases=["reloadcog", "reloadextension"])
+    @commands.command(aliases=["reloadcog", "reloadextension"])
     @is_developer_or_owner()
     async def reload(self, ctx, extension: str):
         """Reload a cog."""
@@ -71,7 +71,7 @@ class BotManagement(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error reloading cog: {e}")
 
-    @commands.hybrid_command(aliases=["servers", "guilds", "listservers"])
+    @commands.command(aliases=["servers", "guilds", "listservers"])
     @is_developer_or_owner()
     async def serverlist(self, ctx):
         """Show a list of servers the bot is in."""
@@ -85,7 +85,7 @@ class BotManagement(commands.Cog):
         embed.set_footer(text=f"Total servers: {len(guilds)}")
         await ctx.send(embed=embed)
 
-    @commands.hybrid_command(aliases=["guilddetails"]) 
+    @commands.command(aliases=["guilddetails"]) 
     @is_developer_or_owner()
     async def serverdetails(self, ctx, server_id: int):
         """Show detailed info about a server by its ID."""
@@ -105,7 +105,7 @@ class BotManagement(commands.Cog):
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
 
-    @commands.hybrid_command(aliases=["forceleave", "kickself"])
+    @commands.command(aliases=["forceleave", "kickself"])
     @is_developer_or_owner()
     async def forceremovebot(self, ctx, server_id: int):
         """Force the bot to leave a server by its ID."""
@@ -118,6 +118,36 @@ class BotManagement(commands.Cog):
             await ctx.send(f"Successfully left the server: {guild.name} (ID: {guild.id})")
         except Exception as e:
             await ctx.send(f"Failed to leave the server: {e}")
+
+    @commands.command(aliases=["customloadcog", "customloadextension", "cloadcog", "cloadextension"])
+    @is_developer_or_owner()
+    async def customload(self, ctx, extension: str):
+        """Load a cog."""
+        try:
+            await self.bot.load_extension(f"custom cogs.{extension}")
+            await ctx.send(f"Loaded cog: {extension}")
+        except Exception as e:
+            await ctx.send(f"Error loading cog: {e}")
+
+    @commands.command(aliases=["customunloadcog", "customunloadextension", "cunloadcog", "cunloadextension"])
+    @is_developer_or_owner()
+    async def customunload(self, ctx, extension: str):
+        """Unload a cog."""
+        try:
+            await self.bot.unload_extension(f"custom cogs.{extension}")
+            await ctx.send(f"Unloaded cog: {extension}")
+        except Exception as e:
+            await ctx.send(f"Error unloading cog: {e}")
+
+    @commands.command(aliases=["customreloadcog", "customreloadextension", "creloadcog", "creloadextension"])
+    @is_developer_or_owner()
+    async def customreload(self, ctx, extension: str):
+        """Reload a cog."""
+        try:
+            await self.bot.reload_extension(f"custom cogs.{extension}")
+            await ctx.send(f"Reloaded cog: {extension}")
+        except Exception as e:
+            await ctx.send(f"Error reloading cog: {e}")
 
 async def setup(bot):
     await bot.add_cog(BotManagement(bot))

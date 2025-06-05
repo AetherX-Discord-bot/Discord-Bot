@@ -8,7 +8,7 @@ class Games(commands.Cog):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
 
-    @commands.hybrid_command(name="coinflip", aliases=["cf"])
+    @commands.hybrid_command(aliases=["cf"])
     async def coinflip(self, ctx):
         """Flip a coin!"""
         result = random.choice(["Heads", "Tails"])
@@ -23,7 +23,7 @@ class Games(commands.Cog):
         result = random.randint(1, sides)
         await ctx.send(f"🎲 You rolled a **{result}** (1-{sides})!")
 
-    @commands.hybrid_command(name="blackjack", aliases=["bj"])
+    @commands.hybrid_command(aliases=["bj"])
     async def blackjack(self, ctx, *, mode: str = None):
         """Play a game of Blackjack against the bot. Use 'constant' to play repeatedly until you say stop."""
         constant_mode = (mode is not None and mode.strip().lower() == "constant")
