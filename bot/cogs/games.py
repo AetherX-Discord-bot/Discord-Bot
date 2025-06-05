@@ -187,5 +187,51 @@ class Games(commands.Cog):
             )
         await ctx.send(embed=embed)
 
+    @commands.hybrid_command()
+    async def highlow(self, ctx):
+        """Play a simple High-Low game. Guess if the next number is higher or lower! Win 5 dabloons if correct, lose nothing if wrong."""
+        number = random.randint(1, 100)
+        embed = discord.Embed(
+            title="High-Low Game",
+            description=f"The current number is **{number}**. Will the next number be higher or lower? Type `high` or `low`.",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ["high", "low"]
+        try:
+            reply = await self.bot.wait_for('message', check=check, timeout=30)
+        except Exception:
+            await ctx.send("Timed out! Game ended.")
+            return
+        guess = reply.content.lower()
+        next_number = random.randint(1, 100)
+        result = None
+        if (guess == "high" and next_number > number) or (guess == "low" and next_number < number):
+            result = True
+        else:
+            result = False
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
+        user_id = ctx.author.id
+        if result:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("UPDATE users SET dabloons = dabloons + 5 WHERE user_id = ?", (user_id,))
+            conn.commit()
+            conn.close()
+            embed = discord.Embed(
+                title="High-Low Result",
+                description=f"The next number was **{next_number}**. You guessed **{guess}** and were **correct**!\nYou win 5 dabloons!",
+                color=discord.Color.green()
+            )
+        else:
+            embed = discord.Embed(
+                title="High-Low Result",
+                description=f"The next number was **{next_number}**. You guessed **{guess}** and were **wrong**.\nYou win nothing, but lose nothing!",
+                color=discord.Color.gold()
+            )
+        await ctx.send(embed=embed)
+
 async def setup(bot):
     await bot.add_cog(Games(bot))

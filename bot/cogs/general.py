@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+import random
 
 class General(commands.Cog):
     """A cog to handle general commands like ping, info, avatar, and banner."""
@@ -118,6 +119,32 @@ class General(commands.Cog):
         for link in tenor_links:
             await feedback_channel.send(f"Tenor GIF from {ctx.author} ({ctx.author.id}): {link}")
         await ctx.send("Thank you for your feedback!")
+
+    @commands.hybrid_command(name="randomword", aliases=["wotd"])
+    async def wordoftheday(self, ctx):
+        """Get a random word with its definition."""
+        # Simple static list; for production, consider an API or larger dataset
+        words = [
+            ("serendipity", "the occurrence and development of events by chance in a happy or beneficial way."),
+            ("ephemeral", "lasting for a very short time."),
+            ("sonder", "the realization that each random passerby is living a life as vivid and complex as your own."),
+            ("luminous", "full of or shedding light; bright or shining."),
+            ("zenith", "the time at which something is most powerful or successful."),
+            ("quixotic", "exceedingly idealistic; unrealistic and impractical."),
+            ("mellifluous", "(of a voice or words) sweet or musical; pleasant to hear."),
+            ("petrichor", "a pleasant smell that frequently accompanies the first rain after a long period of warm, dry weather."),
+            ("sonder", "the realization that each random passerby is living a life as vivid and complex as your own."),
+            ("ineffable", "too great or extreme to be expressed or described in words."),
+            
+        ]
+        word, definition = random.choice(words)
+        embed = discord.Embed(
+            title=f"Word of the Day: {word}",
+            description=definition,
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text=f"Requested by {ctx.author} • {ctx.command}")
+        await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(General(bot))
