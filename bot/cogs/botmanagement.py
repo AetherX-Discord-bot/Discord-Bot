@@ -58,7 +58,7 @@ class BotManagement(commands.Cog):
         """Restart the bot."""
         embed = discord.Embed(
             title="Bot Restarting",
-            description=f"Restart initiated by {ctx.author.mention} ({ctx.author.id}). Notifying all developers and owners...",
+            description=f"Restart initiated by ||{ctx.author.mention} ({ctx.author.id}). Notifying all developers and owners...||",
             color=discord.Color.orange()
         )
         await ctx.send(embed=embed)
