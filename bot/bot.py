@@ -13,6 +13,9 @@ COG_WHITELIST = config.get('COG WHITELIST', [])
 COG_BLACKLIST = config.get('COG BLACKLIST', [])
 LOAD_ALL_COGS = config.get('LOAD_ALL_COGS', True)
 BYPASS_FORCED_BOTMANAGEMENT_PY = config.get('BYPASS_FORCED_BOTMANAGEMENT.PY', False)
+CUSTOM_COGS_WHITELIST = config.get('CUSTOM_COGS_WHITELIST', [])
+CUSTOM_COGS_BLACKLIST = config.get('CUSTOM_COGS_BLACKLIST', [])
+CUSTOM_COGS_AUTOMATICALLY_LOADED = config.get('CUSTOM_COGS_AUTOMATICALLY_LOADED', True)
 
 async def load_cogs(bot):
     from pathlib import Path
@@ -37,6 +40,21 @@ async def load_cogs(bot):
                 await bot.load_extension(cog_name)
             except Exception as e:
                 print(f'Failed to load cog {cog_name}: {e}')
+
+    # Load custom cogs if enabled
+    if CUSTOM_COGS_AUTOMATICALLY_LOADED:
+        custom_cogs_dir = Path(__file__).parent / 'custom cogs'
+        for file in custom_cogs_dir.glob('*.py'):
+            if file.name.startswith('_'):
+                continue
+            if file.stem in CUSTOM_COGS_BLACKLIST:
+                continue
+            cog_name = f"custom cogs.{file.stem}"
+            if file.stem in CUSTOM_COGS_WHITELIST or CUSTOM_COGS_AUTOMATICALLY_LOADED:
+                try:
+                    await bot.load_extension(cog_name)
+                except Exception as e:
+                    print(f'Failed to load custom cog {cog_name}: {e}')
 
 intents = discord.Intents.default()
 intents.message_content = True

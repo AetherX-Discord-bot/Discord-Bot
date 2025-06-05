@@ -1,5 +1,7 @@
 # Support the Project with Donations
 
+> **Note:** This project is currently under an overhaul. Features, documentation, and structure may change frequently.
+
 Thank you for considering a donation to support AetherX! Your contributions help us maintain, improve, and expand the bot, ensuring it remains available for everyone.
 
 ## Why Donate?
