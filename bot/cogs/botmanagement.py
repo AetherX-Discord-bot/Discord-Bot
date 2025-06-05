@@ -56,7 +56,31 @@ class BotManagement(commands.Cog):
     @is_developer_or_owner()
     async def restart(self, ctx):
         """Restart the bot."""
-        await ctx.send("Restarting bot...")
+        embed = discord.Embed(
+            title="Bot Restarting",
+            description=f"Restart initiated by {ctx.author.mention} ({ctx.author.id}). Notifying all developers and owners...",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        # Notify all devs and owners
+        notified = []
+        config = getattr(self, 'config', getattr(self.bot, 'config', {}))
+        owner_ids = config.get('BOT_OWNERS', [])
+        developer_ids = config.get('BOT_DEVELOPERS', [])
+        all_ids = set(owner_ids + developer_ids)
+        for user_id in all_ids:
+            try:
+                user = await self.bot.fetch_user(user_id)
+                if user:
+                    notify_embed = discord.Embed(
+                        title="Bot Restart Notification",
+                        description=f"The bot is being restarted by {ctx.author.mention} ({ctx.author.id}) at their request.",
+                        color=discord.Color.orange()
+                    )
+                    await user.send(embed=notify_embed)
+                    notified.append(user_id)
+            except Exception:
+                continue  # Skip if failed to notify
         import os
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
