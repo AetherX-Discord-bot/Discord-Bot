@@ -20,7 +20,8 @@ class BotManagement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = getattr(bot, 'config', {})
-        self.db_path = os.path.join(os.path.dirname(__file__), '../data/database.db')
+        # Always resolve the database path relative to the workspace root
+        self.db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
 
     def is_server_whitelisted(self, server_id):
         try:
@@ -119,6 +120,15 @@ class BotManagement(commands.Cog):
             await ctx.send(f"I'm not in a server with ID {server_id}.")
             return
         owner = guild.owner or await self.bot.fetch_user(guild.owner_id)
+        # Determine bot access status
+        whitelisted = self.is_server_whitelisted(server_id)
+        blacklisted = self.is_server_blacklisted(server_id)
+        if blacklisted:
+            access_status = "Blacklisted (No Access)"
+        elif whitelisted:
+            access_status = "Whitelisted (Full Access)"
+        else:
+            access_status = "Default (Normal Access)"
         embed = discord.Embed(title=f"Server Details: {guild.name}", color=discord.Color.purple())
         embed.set_thumbnail(url=guild.icon.url if guild.icon else discord.Embed.Empty)
         embed.add_field(name="Server ID", value=guild.id)
@@ -127,13 +137,17 @@ class BotManagement(commands.Cog):
         embed.add_field(name="Created At", value=guild.created_at.strftime('%Y-%m-%d %H:%M:%S'))
         embed.add_field(name="Boosts", value=guild.premium_subscription_count)
         embed.add_field(name="Channels", value=len(guild.channels))
+        embed.add_field(name="Bot Access Status", value=access_status, inline=False)
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
 
     @commands.command(aliases=["forceleave", "kickself"])
     @is_developer_or_owner()
     async def forceremovebot(self, ctx, server_id: int):
-        """Force the bot to leave a server by its ID."""
+        """Force the bot to leave a server by its ID. (Will not work on whitelisted servers)"""
+        if self.is_server_whitelisted(server_id):
+            await ctx.send(f"Cannot force remove: Server {server_id} is whitelisted.")
+            return
         guild = discord.utils.get(self.bot.guilds, id=server_id)
         if not guild:
             await ctx.send(f"I'm not in a server with ID {server_id}.")
@@ -173,6 +187,75 @@ class BotManagement(commands.Cog):
             await ctx.send(f"Reloaded cog: {extension}")
         except Exception as e:
             await ctx.send(f"Error reloading cog: {e}")
+
+    @commands.command()
+    @is_developer_or_owner()
+    async def whitelist(self, ctx, server_id: int):
+        """Toggle whitelisting for a server by its ID. Cannot be both whitelisted and blacklisted."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            # Check blacklist status
+            c.execute("SELECT blacklisted_status FROM servers WHERE server_id = ?", (server_id,))
+            blacklisted = c.fetchone()
+            if blacklisted and blacklisted[0]:
+                await ctx.send(f"Cannot whitelist: Server {server_id} is currently blacklisted. Remove from blacklist first.")
+                conn.close()
+                return
+            c.execute("SELECT whitelisted_status FROM servers WHERE server_id = ?", (server_id,))
+            row = c.fetchone()
+            if row and row[0]:
+                # Already whitelisted, remove whitelist
+                c.execute("UPDATE servers SET whitelisted_status = 0 WHERE server_id = ?", (server_id,))
+                conn.commit()
+                conn.close()
+                await ctx.send(f"Server {server_id} has been removed from the whitelist.")
+            else:
+                # Not whitelisted, add whitelist
+                c.execute("INSERT OR IGNORE INTO servers (server_id, whitelisted_status) VALUES (?, 1)", (server_id,))
+                c.execute("UPDATE servers SET whitelisted_status = 1 WHERE server_id = ?", (server_id,))
+                conn.commit()
+                conn.close()
+                await ctx.send(f"Server {server_id} has been whitelisted.")
+        except Exception as e:
+            await ctx.send(f"Failed to toggle whitelist for server: {e}")
+
+    @commands.command()
+    @is_developer_or_owner()
+    async def blacklist(self, ctx, server_id: int):
+        """Toggle blacklisting for a server by its ID. Cannot be both blacklisted and whitelisted. The bot will immediately leave if present when blacklisted."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            # Check whitelist status
+            c.execute("SELECT whitelisted_status FROM servers WHERE server_id = ?", (server_id,))
+            whitelisted = c.fetchone()
+            if whitelisted and whitelisted[0]:
+                await ctx.send(f"Cannot blacklist: Server {server_id} is currently whitelisted. Remove from whitelist first.")
+                conn.close()
+                return
+            c.execute("SELECT blacklisted_status FROM servers WHERE server_id = ?", (server_id,))
+            row = c.fetchone()
+            if row and row[0]:
+                # Already blacklisted, remove blacklist
+                c.execute("UPDATE servers SET blacklisted_status = 0 WHERE server_id = ?", (server_id,))
+                conn.commit()
+                conn.close()
+                await ctx.send(f"Server {server_id} has been removed from the blacklist.")
+            else:
+                # Not blacklisted, add blacklist
+                c.execute("INSERT OR IGNORE INTO servers (server_id, blacklisted_status) VALUES (?, 1)", (server_id,))
+                c.execute("UPDATE servers SET blacklisted_status = 1 WHERE server_id = ?", (server_id,))
+                conn.commit()
+                conn.close()
+                guild = discord.utils.get(self.bot.guilds, id=server_id)
+                if guild:
+                    await guild.leave()
+                    await ctx.send(f"Server {server_id} has been blacklisted and the bot has left the server.")
+                else:
+                    await ctx.send(f"Server {server_id} has been blacklisted. The bot is not currently in that server.")
+        except Exception as e:
+            await ctx.send(f"Failed to toggle blacklist for server: {e}")
 
 async def setup(bot):
     await bot.add_cog(BotManagement(bot))
