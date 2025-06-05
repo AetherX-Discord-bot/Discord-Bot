@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 import random
+import sqlite3
+import os
 
 class Games(commands.Cog):
     """A cog to handle various games like coinflip, roll, and blackjack."""
@@ -12,6 +14,15 @@ class Games(commands.Cog):
     async def coinflip(self, ctx):
         """Flip a coin!"""
         result = random.choice(["Heads", "Tails"])
+        if result == "Heads":
+            db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
+            user_id = ctx.author.id
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("UPDATE users SET dabloons = dabloons + 1 WHERE user_id = ?", (user_id,))
+            conn.commit()
+            conn.close()
         await ctx.send(f"🪙 The coin landed on: **{result}**!")
 
     @commands.hybrid_command(name="roll")
@@ -25,10 +36,25 @@ class Games(commands.Cog):
 
     @commands.hybrid_command(aliases=["bj"])
     async def blackjack(self, ctx, *, mode: str = None):
-        """Play a game of Blackjack against the bot. Use 'constant' to play repeatedly until you say stop."""
+        """Play a game of Blackjack against the bot. Use 'constant' to play repeatedly until you say stop. Costs 10 dabloons to play, win 20 dabloons if you win."""
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
+        user_id = ctx.author.id
         constant_mode = (mode is not None and mode.strip().lower() == "constant")
         keep_playing = True
         while keep_playing:
+            # Check and deduct 10 dabloons
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("SELECT dabloons FROM users WHERE user_id = ?", (user_id,))
+            bal = c.fetchone()[0]
+            if bal < 10:
+                await ctx.send("You need at least 10 dabloons to play Blackjack!")
+                conn.close()
+                return
+            c.execute("UPDATE users SET dabloons = dabloons - 10 WHERE user_id = ?", (user_id,))
+            conn.commit()
+            conn.close()
             deck = [str(n) for n in range(2, 11)] + list('JQKA')
             deck = deck * 4
             random.shuffle(deck)
@@ -70,6 +96,12 @@ class Games(commands.Cog):
                     await ctx.send(f"Dealer draws: {dealer[-1]} (Total: {hand_value(dealer)})")
                 if hand_value(dealer) > 21 or hand_value(player) > hand_value(dealer):
                     await ctx.send("You win!")
+                    # Award 20 dabloons
+                    conn = sqlite3.connect(db_path)
+                    c = conn.cursor()
+                    c.execute("UPDATE users SET dabloons = dabloons + 20 WHERE user_id = ?", (user_id,))
+                    conn.commit()
+                    conn.close()
                 elif hand_value(player) < hand_value(dealer):
                     await ctx.send("Dealer wins!")
                 else:
