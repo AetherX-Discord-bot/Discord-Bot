@@ -520,8 +520,8 @@ class Games(commands.Cog):
                         except Exception:
                             pass
                     session['pot'] = 0
-                    # Return only non-folded players for this hand, and propagate folded/spectators/section_bet
-                    return [winner], bets, folded, spectators, section_bet
+                    # End the entire hand/game, not just the section
+                    raise StopAsyncIteration  # Custom signal to break out of play_hand_dm
             # Return only non-folded players for this hand
             return [p for p in active_players if p[0] not in folded], bets, folded, spectators, section_bet
 
@@ -537,48 +537,52 @@ class Games(commands.Cog):
             active_players = get_active_players(session['players'])
             folded = set()
             spectators = {}
-            # Pre-flop: 3 betting rounds
-            section_bet = False
-            active_players, _, folded, spectators, section_bet = await betting_round("Pre-Flop", 3, active_players, hands, [], folded=folded, spectators=spectators, section_bet=section_bet)
-            # Reveal flop
-            flop = community[:3]
-            embed = discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            for user in spectators.values():
-                try:
-                    await user.send(embed=discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal()))
-                except Exception:
-                    pass
-            await asyncio.sleep(2)
-            # Before turn: 2 betting rounds
-            section_bet = False
-            active_players, _, folded, spectators, section_bet = await betting_round("Before Turn", 2, active_players, hands, flop, folded=folded, spectators=spectators, section_bet=section_bet)
-            # Reveal turn
-            turn = community[3]
-            embed = discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            for user in spectators.values():
-                try:
-                    await user.send(embed=discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal()))
-                except Exception:
-                    pass
-            await asyncio.sleep(2)
-            # Before river: 1 betting round
-            section_bet = False
-            active_players, _, folded, spectators, section_bet = await betting_round("Before River", 1, active_players, hands, flop + [turn], folded=folded, spectators=spectators, section_bet=section_bet)
-            # Reveal river
-            river = community[4]
-            embed = discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            for user in spectators.values():
-                try:
-                    await user.send(embed=discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal()))
-                except Exception:
-                    pass
-            await asyncio.sleep(2)
-            # After river: 3 betting rounds
-            section_bet = False
-            active_players, _, folded, spectators, section_bet = await betting_round("After River", 3, active_players, hands, flop + [turn, river], folded=folded, spectators=spectators, section_bet=section_bet)
+            try:
+                # Pre-flop: 3 betting rounds
+                section_bet = False
+                active_players, _, folded, spectators, section_bet = await betting_round("Pre-Flop", 3, active_players, hands, [], folded=folded, spectators=spectators, section_bet=section_bet)
+                # Reveal flop
+                flop = community[:3]
+                embed = discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal())
+                await ctx.send(embed=embed)
+                for user in spectators.values():
+                    try:
+                        await user.send(embed=discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal()))
+                    except Exception:
+                        pass
+                await asyncio.sleep(2)
+                # Before turn: 2 betting rounds
+                section_bet = False
+                active_players, _, folded, spectators, section_bet = await betting_round("Before Turn", 2, active_players, hands, flop, folded=folded, spectators=spectators, section_bet=section_bet)
+                # Reveal turn
+                turn = community[3]
+                embed = discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal())
+                await ctx.send(embed=embed)
+                for user in spectators.values():
+                    try:
+                        await user.send(embed=discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal()))
+                    except Exception:
+                        pass
+                await asyncio.sleep(2)
+                # Before river: 1 betting round
+                section_bet = False
+                active_players, _, folded, spectators, section_bet = await betting_round("Before River", 1, active_players, hands, flop + [turn], folded=folded, spectators=spectators, section_bet=section_bet)
+                # Reveal river
+                river = community[4]
+                embed = discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal())
+                await ctx.send(embed=embed)
+                for user in spectators.values():
+                    try:
+                        await user.send(embed=discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal()))
+                    except Exception:
+                        pass
+                await asyncio.sleep(2)
+                # After river: 3 betting rounds
+                section_bet = False
+                active_players, _, folded, spectators, section_bet = await betting_round("After River", 3, active_players, hands, flop + [turn, river], folded=folded, spectators=spectators, section_bet=section_bet)
+            except StopAsyncIteration:
+                # End the hand immediately if only one player remains
+                return
             # Remove/cash out only players with 0 chips or who timed out (not just folded)
             leavers = []
             for i, p in enumerate(session['players']):
@@ -655,7 +659,11 @@ class Games(commands.Cog):
         else:
             playing = True
             while playing and not session.get('ended', False):
-                await play_hand_dm()
+                try:
+                    await play_hand_dm()
+                except StopAsyncIteration:
+                    # Custom signal to break out of the hand loop and end the hand
+                    break
                 # Remove players with 0 chips
                 session['players'] = [p for p in session['players'] if p[1] > 0]
                 # DM all humans to ask if they want to continue
