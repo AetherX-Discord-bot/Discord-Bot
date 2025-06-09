@@ -480,12 +480,6 @@ class Games(commands.Cog):
                         if bet > 0:
                             session['players'][i] = (p[0], p[1] - bet, p[2], p[3])
                             session['pot'] += bet
-                            # DM updated chip count after bet
-                            if not p[2] and p[3]:
-                                try:
-                                    await p[3].send(embed=discord.Embed(description=f"Your new chip count: {p[1] - bet}", color=discord.Color.blue()))
-                                except Exception:
-                                    pass
                 # Announce actions after each round
                 action_lines = []
                 for p in active_players:
@@ -509,8 +503,14 @@ class Games(commands.Cog):
                 remaining = [p for p in active_players if p[0] not in folded]
                 if len(remaining) == 1:
                     winner = remaining[0]
-                    idx = session['players'].index(winner)
-                    session['players'][idx] = (winner[0], winner[1] + session['pot'], winner[2], winner[3])
+                    idx = None
+                    # Find the winner in session['players'] by user_id
+                    for i, sp in enumerate(session['players']):
+                        if sp[0] == winner[0]:
+                            idx = i
+                            break
+                    if idx is not None:
+                        session['players'][idx] = (winner[0], winner[1] + session['pot'], winner[2], winner[3])
                     win_mentions = winner[3].mention if not winner[2] else f"[BOT] {winner[0]}"
                     embed = discord.Embed(title="Poker Hand Result", description=f"All other players folded! {win_mentions} wins the pot of {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)", color=discord.Color.green())
                     await ctx.send(embed=embed)
@@ -519,15 +519,9 @@ class Games(commands.Cog):
                             await user.send(embed=embed)
                         except Exception:
                             pass
-                    # DM winner their new chip count
-                    if not winner[2] and winner[3]:
-                        try:
-                            await winner[3].send(embed=discord.Embed(description=f"You won the pot! Your new chip count: {winner[1] + session['pot']}", color=discord.Color.green()))
-                        except Exception:
-                            pass
                     session['pot'] = 0
-                    # Return immediately to end the hand
-                    return [], bets, folded, spectators, section_bet
+                    # Return only non-folded players for this hand, and propagate folded/spectators/section_bet
+                    return [winner], bets, folded, spectators, section_bet
             # Return only non-folded players for this hand
             return [p for p in active_players if p[0] not in folded], bets, folded, spectators, section_bet
 
