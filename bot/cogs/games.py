@@ -251,8 +251,25 @@ class Games(commands.Cog):
             self.poker_sessions = {}
         guild_id = ctx.guild.id if ctx.guild else ctx.author.id
         session = self.poker_sessions.get(guild_id)
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
+        user_id = ctx.author.id
+        # --- Force constant mode logic ---
+        force_constant = False
+        is_constant = False
+        if mode is not None and mode.strip().lower() in ["constant", "true"]:
+            config = getattr(self, 'config', getattr(self.bot, 'config', {}))
+            owner_ids = config.get('BOT_OWNERS', [])
+            developer_ids = config.get('BOT_DEVELOPERS', [])
+            all_ids = set(owner_ids + developer_ids)
+            if user_id not in all_ids:
+                await ctx.send(embed=discord.Embed(description="Only bot developers or owners can start a constant poker session.", color=discord.Color.red()))
+                return
+            if mode.strip().lower() == "true":
+                force_constant = True
+            is_constant = True
+
         # Check if a dev/admin wants to disable constant mode
-        if session and session.get('constant', False) and mode is not None and mode.strip().lower() == "false":
+        elif session and session.get('constant', False) and mode is not None and mode.strip().lower() == "false":
             config = getattr(self, 'config', getattr(self.bot, 'config', {}))
             owner_ids = config.get('BOT_OWNERS', [])
             developer_ids = config.get('BOT_DEVELOPERS', [])
@@ -271,22 +288,6 @@ class Games(commands.Cog):
                     color=discord.Color.red()
                 ))
                 return
-        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
-        user_id = ctx.author.id
-        # --- Force constant mode logic ---
-        force_constant = False
-        is_constant = False
-        if mode is not None and mode.strip().lower() in ["constant", "true"]:
-            config = getattr(self, 'config', getattr(self.bot, 'config', {}))
-            owner_ids = config.get('BOT_OWNERS', [])
-            developer_ids = config.get('BOT_DEVELOPERS', [])
-            all_ids = set(owner_ids + developer_ids)
-            if user_id not in all_ids:
-                await ctx.send(embed=discord.Embed(description="Only bot developers or owners can start a constant poker session.", color=discord.Color.red()))
-                return
-            if mode.strip().lower() == "true":
-                force_constant = True
-            is_constant = True
         # --- Session Setup ---
         if not session or session.get('ended', False):
             # Only allow poker in a guild, not in DMs
