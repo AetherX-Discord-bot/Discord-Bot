@@ -372,27 +372,33 @@ class Games(commands.Cog):
             if spectators is None:
                 spectators = {}
             bets = {p[0]: 0 for p in active_players}
+            actions = {p[0]: [] for p in active_players}  # Track actions for summary
             for bet_num in range(num_bets):
                 round_desc = f"**{round_name}** - Betting Round {bet_num+1}/{num_bets}\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)"
                 await ctx.send(embed=discord.Embed(title=f"Poker {round_name} Betting", description=round_desc, color=discord.Color.blurple()))
                 for p in list(active_players):
                     if p[0] in folded:
-                        # Add to spectators if not already
                         if not p[2] and p[0] not in spectators:
                             spectators[p[0]] = p[3]
                         continue
                     if p[2]:
-                        # Bot logic
+                        # Bot logic: randomly bet, check, or fold
                         if p[1] < min_bet:
                             bets[p[0]] = 0
                             folded.add(p[0])
+                            actions[p[0]].append('folded')
                         else:
-                            bet_amt = random.randint(min_bet, min(p[1], 100))
-                            bets[p[0]] += bet_amt
+                            action = random.choice(['bet', 'check'])
+                            if action == 'bet':
+                                bet_amt = random.randint(min_bet, min(p[1], 100))
+                                bets[p[0]] += bet_amt
+                                actions[p[0]].append(f"bet {bet_amt}")
+                            else:
+                                actions[p[0]].append('checked')
                     else:
                         user = p[3]
                         try:
-                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}) or 'fold'."
+                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}), 'check', or 'fold'."
                             await user.send(embed=discord.Embed(title="Poker Betting", description=bet_prompt, color=discord.Color.blue()))
                             def bet_check(m):
                                 return m.author.id == user.id and isinstance(m.channel, discord.DMChannel)
@@ -401,7 +407,10 @@ class Games(commands.Cog):
                                 bets[p[0]] = 0
                                 folded.add(p[0])
                                 spectators[p[0]] = user
+                                actions[p[0]].append('folded')
                                 await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
+                            elif bet_msg.content.lower() == 'check':
+                                actions[p[0]].append('checked')
                             else:
                                 try:
                                     bet_amt = int(bet_msg.content)
@@ -410,19 +419,23 @@ class Games(commands.Cog):
                                         bets[p[0]] = 0
                                         folded.add(p[0])
                                         spectators[p[0]] = user
+                                        actions[p[0]].append('folded')
                                         await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
                                     else:
                                         bets[p[0]] += bet_amt
+                                        actions[p[0]].append(f"bet {bet_amt}")
                                 except Exception:
                                     await user.send("Invalid input. You are folded this hand.")
                                     bets[p[0]] = 0
                                     folded.add(p[0])
                                     spectators[p[0]] = user
+                                    actions[p[0]].append('folded')
                                     await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
                         except Exception:
                             # Timeout or DM error: remove and cash out
                             bets[p[0]] = 0
                             folded.add(p[0])
+                            actions[p[0]].append('folded')
                             chips = p[1]
                             dabloons = chips * 0.01
                             try:
@@ -442,6 +455,25 @@ class Games(commands.Cog):
                         if bet > 0:
                             session['players'][i] = (p[0], p[1] - bet, p[2], p[3])
                             session['pot'] += bet
+                # Announce actions after each round
+                action_lines = []
+                for p in active_players:
+                    if p[0] in folded:
+                        action = actions[p[0]][-1] if actions[p[0]] else 'folded'
+                    elif actions[p[0]]:
+                        action = actions[p[0]][-1]
+                    else:
+                        action = 'checked'
+                    name = p[3].mention if not p[2] else f"[BOT] {p[0]}"
+                    action_lines.append(f"{name}: {action}")
+                summary = '\n'.join(action_lines)
+                embed = discord.Embed(title=f"{round_name} - Betting Round {bet_num+1} Actions", description=summary, color=discord.Color.blurple())
+                await ctx.send(embed=embed)
+                for user in spectators.values():
+                    try:
+                        await user.send(embed=embed)
+                    except Exception:
+                        pass
             # Return only non-folded players for this hand
             return [p for p in active_players if p[0] not in folded], bets, folded, spectators
 
