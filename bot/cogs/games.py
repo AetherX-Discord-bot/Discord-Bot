@@ -362,7 +362,7 @@ class Games(commands.Cog):
                         await ctx.send(embed=discord.Embed(description="The poker game is full and no bots are present to swap. You are in the queue.", color=discord.Color.gold()))
                     return
         # --- Poker Game Logic (actual gameplay, DM-based, betting, continue) ---
-        async def betting_round(round_name, num_bets, active_players, hands, community_cards, min_bet=10, folded=None, spectators=None):
+        async def betting_round(round_name, num_bets, active_players, hands, community_cards, min_bet=10, folded=None, spectators=None, section_bet=False):
             """
             Conducts a betting round for all active players.
             Returns: (updated_active_players, bets_this_round)
@@ -376,29 +376,48 @@ class Games(commands.Cog):
             for bet_num in range(num_bets):
                 round_desc = f"**{round_name}** - Betting Round {bet_num+1}/{num_bets}\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)"
                 await ctx.send(embed=discord.Embed(title=f"Poker {round_name} Betting", description=round_desc, color=discord.Color.blurple()))
+                round_bet = False  # Track if anyone has bet this round
                 for p in list(active_players):
                     if p[0] in folded:
                         if not p[2] and p[0] not in spectators:
                             spectators[p[0]] = p[3]
                         continue
                     if p[2]:
-                        # Bot logic: randomly bet, check, or fold
+                        # Bot logic: randomly bet, check, or fold (but only check if no one has bet in section)
                         if p[1] < min_bet:
                             bets[p[0]] = 0
                             folded.add(p[0])
                             actions[p[0]].append('folded')
                         else:
-                            action = random.choice(['bet', 'check'])
-                            if action == 'bet':
-                                bet_amt = random.randint(min_bet, min(p[1], 100))
-                                bets[p[0]] += bet_amt
-                                actions[p[0]].append(f"bet {bet_amt}")
+                            if not section_bet:
+                                action = random.choice(['bet', 'check'])
+                                if action == 'bet':
+                                    bet_amt = random.randint(min_bet, min(p[1], 100))
+                                    bets[p[0]] += bet_amt
+                                    actions[p[0]].append(f"bet {bet_amt}")
+                                    round_bet = True
+                                    section_bet = True
+                                else:
+                                    actions[p[0]].append('checked')
                             else:
-                                actions[p[0]].append('checked')
+                                # Someone has bet in this section, so must call, raise, or fold
+                                action = random.choice(['bet', 'fold'])
+                                if action == 'bet':
+                                    bet_amt = random.randint(min_bet, min(p[1], 100))
+                                    bets[p[0]] += bet_amt
+                                    actions[p[0]].append(f"bet {bet_amt}")
+                                    round_bet = True
+                                    section_bet = True
+                                else:
+                                    bets[p[0]] = 0
+                                    folded.add(p[0])
+                                    actions[p[0]].append('folded')
                     else:
                         user = p[3]
                         try:
-                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}), 'check', or 'fold'."
+                            # Only allow check if no one has bet yet in this section
+                            allow_check = not section_bet
+                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}){' or `check`' if allow_check else ''}, or 'fold'."
                             await user.send(embed=discord.Embed(title="Poker Betting", description=bet_prompt, color=discord.Color.blue()))
                             def bet_check(m):
                                 return m.author.id == user.id and isinstance(m.channel, discord.DMChannel)
@@ -409,8 +428,12 @@ class Games(commands.Cog):
                                 spectators[p[0]] = user
                                 actions[p[0]].append('folded')
                                 await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
-                            elif bet_msg.content.lower() == 'check':
+                            elif bet_msg.content.lower() == 'check' and allow_check:
                                 actions[p[0]].append('checked')
+                            elif bet_msg.content.lower() == 'check' and not allow_check:
+                                await user.send(embed=discord.Embed(description="You cannot check after a bet has been made in this section. Please bet or fold.", color=discord.Color.red()))
+                                # Re-prompt
+                                return await betting_round(round_name, num_bets-bet_num, [p], hands, community_cards, min_bet, folded, spectators, section_bet)
                             else:
                                 try:
                                     bet_amt = int(bet_msg.content)
@@ -424,6 +447,8 @@ class Games(commands.Cog):
                                     else:
                                         bets[p[0]] += bet_amt
                                         actions[p[0]].append(f"bet {bet_amt}")
+                                        round_bet = True
+                                        section_bet = True
                                 except Exception:
                                     await user.send("Invalid input. You are folded this hand.")
                                     bets[p[0]] = 0
@@ -455,6 +480,12 @@ class Games(commands.Cog):
                         if bet > 0:
                             session['players'][i] = (p[0], p[1] - bet, p[2], p[3])
                             session['pot'] += bet
+                            # DM updated chip count after bet
+                            if not p[2] and p[3]:
+                                try:
+                                    await p[3].send(embed=discord.Embed(description=f"Your new chip count: {p[1] - bet}", color=discord.Color.blue()))
+                                except Exception:
+                                    pass
                 # Announce actions after each round
                 action_lines = []
                 for p in active_players:
@@ -474,8 +505,31 @@ class Games(commands.Cog):
                         await user.send(embed=embed)
                     except Exception:
                         pass
+                # --- Check if only one player remains (all others folded) ---
+                remaining = [p for p in active_players if p[0] not in folded]
+                if len(remaining) == 1:
+                    winner = remaining[0]
+                    idx = session['players'].index(winner)
+                    session['players'][idx] = (winner[0], winner[1] + session['pot'], winner[2], winner[3])
+                    win_mentions = winner[3].mention if not winner[2] else f"[BOT] {winner[0]}"
+                    embed = discord.Embed(title="Poker Hand Result", description=f"All other players folded! {win_mentions} wins the pot of {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)", color=discord.Color.green())
+                    await ctx.send(embed=embed)
+                    for user in spectators.values():
+                        try:
+                            await user.send(embed=embed)
+                        except Exception:
+                            pass
+                    # DM winner their new chip count
+                    if not winner[2] and winner[3]:
+                        try:
+                            await winner[3].send(embed=discord.Embed(description=f"You won the pot! Your new chip count: {winner[1] + session['pot']}", color=discord.Color.green()))
+                        except Exception:
+                            pass
+                    session['pot'] = 0
+                    # Return immediately to end the hand
+                    return [], bets, folded, spectators, section_bet
             # Return only non-folded players for this hand
-            return [p for p in active_players if p[0] not in folded], bets, folded, spectators
+            return [p for p in active_players if p[0] not in folded], bets, folded, spectators, section_bet
 
         async def play_hand_dm():
             deck = [f"{rank}{suit}" for rank in list(map(str, range(2, 11))) + list('JQKA') for suit in '♠♥♦♣']
@@ -490,7 +544,8 @@ class Games(commands.Cog):
             folded = set()
             spectators = {}
             # Pre-flop: 3 betting rounds
-            active_players, _, folded, spectators = await betting_round("Pre-Flop", 3, active_players, hands, [], folded=folded, spectators=spectators)
+            section_bet = False
+            active_players, _, folded, spectators, section_bet = await betting_round("Pre-Flop", 3, active_players, hands, [], folded=folded, spectators=spectators, section_bet=section_bet)
             # Reveal flop
             flop = community[:3]
             embed = discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal())
@@ -502,7 +557,8 @@ class Games(commands.Cog):
                     pass
             await asyncio.sleep(2)
             # Before turn: 2 betting rounds
-            active_players, _, folded, spectators = await betting_round("Before Turn", 2, active_players, hands, flop, folded=folded, spectators=spectators)
+            section_bet = False
+            active_players, _, folded, spectators, section_bet = await betting_round("Before Turn", 2, active_players, hands, flop, folded=folded, spectators=spectators, section_bet=section_bet)
             # Reveal turn
             turn = community[3]
             embed = discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal())
@@ -514,7 +570,8 @@ class Games(commands.Cog):
                     pass
             await asyncio.sleep(2)
             # Before river: 1 betting round
-            active_players, _, folded, spectators = await betting_round("Before River", 1, active_players, hands, flop + [turn], folded=folded, spectators=spectators)
+            section_bet = False
+            active_players, _, folded, spectators, section_bet = await betting_round("Before River", 1, active_players, hands, flop + [turn], folded=folded, spectators=spectators, section_bet=section_bet)
             # Reveal river
             river = community[4]
             embed = discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal())
@@ -526,7 +583,8 @@ class Games(commands.Cog):
                     pass
             await asyncio.sleep(2)
             # After river: 3 betting rounds
-            active_players, _, folded, spectators = await betting_round("After River", 3, active_players, hands, flop + [turn, river], folded=folded, spectators=spectators)
+            section_bet = False
+            active_players, _, folded, spectators, section_bet = await betting_round("After River", 3, active_players, hands, flop + [turn, river], folded=folded, spectators=spectators, section_bet=section_bet)
             # Remove/cash out only players with 0 chips or who timed out (not just folded)
             leavers = []
             for i, p in enumerate(session['players']):
