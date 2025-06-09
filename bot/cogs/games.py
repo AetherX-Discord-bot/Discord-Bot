@@ -362,6 +362,89 @@ class Games(commands.Cog):
                         await ctx.send(embed=discord.Embed(description="The poker game is full and no bots are present to swap. You are in the queue.", color=discord.Color.gold()))
                     return
         # --- Poker Game Logic (actual gameplay, DM-based, betting, continue) ---
+        async def betting_round(round_name, num_bets, active_players, hands, community_cards, min_bet=10, folded=None, spectators=None):
+            """
+            Conducts a betting round for all active players.
+            Returns: (updated_active_players, bets_this_round)
+            """
+            if folded is None:
+                folded = set()
+            if spectators is None:
+                spectators = {}
+            bets = {p[0]: 0 for p in active_players}
+            for bet_num in range(num_bets):
+                round_desc = f"**{round_name}** - Betting Round {bet_num+1}/{num_bets}\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)"
+                await ctx.send(embed=discord.Embed(title=f"Poker {round_name} Betting", description=round_desc, color=discord.Color.blurple()))
+                for p in list(active_players):
+                    if p[0] in folded:
+                        # Add to spectators if not already
+                        if not p[2] and p[0] not in spectators:
+                            spectators[p[0]] = p[3]
+                        continue
+                    if p[2]:
+                        # Bot logic
+                        if p[1] < min_bet:
+                            bets[p[0]] = 0
+                            folded.add(p[0])
+                        else:
+                            bet_amt = random.randint(min_bet, min(p[1], 100))
+                            bets[p[0]] += bet_amt
+                    else:
+                        user = p[3]
+                        try:
+                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}) or 'fold'."
+                            await user.send(embed=discord.Embed(title="Poker Betting", description=bet_prompt, color=discord.Color.blue()))
+                            def bet_check(m):
+                                return m.author.id == user.id and isinstance(m.channel, discord.DMChannel)
+                            bet_msg = await self.bot.wait_for('message', check=bet_check, timeout=60)
+                            if bet_msg.content.lower() == 'fold':
+                                bets[p[0]] = 0
+                                folded.add(p[0])
+                                spectators[p[0]] = user
+                                await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
+                            else:
+                                try:
+                                    bet_amt = int(bet_msg.content)
+                                    if bet_amt < min_bet or bet_amt > p[1]:
+                                        await user.send("Invalid bet. You are folded this hand.")
+                                        bets[p[0]] = 0
+                                        folded.add(p[0])
+                                        spectators[p[0]] = user
+                                        await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
+                                    else:
+                                        bets[p[0]] += bet_amt
+                                except Exception:
+                                    await user.send("Invalid input. You are folded this hand.")
+                                    bets[p[0]] = 0
+                                    folded.add(p[0])
+                                    spectators[p[0]] = user
+                                    await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
+                        except Exception:
+                            # Timeout or DM error: remove and cash out
+                            bets[p[0]] = 0
+                            folded.add(p[0])
+                            chips = p[1]
+                            dabloons = chips * 0.01
+                            try:
+                                await user.send(embed=discord.Embed(description=f"You have been removed from the poker game due to inactivity and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.orange()))
+                            except Exception:
+                                pass
+                            conn = sqlite3.connect(db_path)
+                            c = conn.cursor()
+                            c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, p[0]))
+                            c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+                            conn.commit()
+                            conn.close()
+                # Deduct bets and add to pot
+                for i, p in enumerate(session['players']):
+                    if p[0] not in folded:
+                        bet = bets.get(p[0], 0)
+                        if bet > 0:
+                            session['players'][i] = (p[0], p[1] - bet, p[2], p[3])
+                            session['pot'] += bet
+            # Return only non-folded players for this hand
+            return [p for p in active_players if p[0] not in folded], bets, folded, spectators
+
         async def play_hand_dm():
             deck = [f"{rank}{suit}" for rank in list(map(str, range(2, 11))) + list('JQKA') for suit in '♠♥♦♣']
             random.shuffle(deck)
@@ -369,114 +452,99 @@ class Games(commands.Cog):
             for p in session['players']:
                 hands[p[0]] = [deck.pop(), deck.pop()]
             community = [deck.pop() for _ in range(5)]
-            # DM hands to humans (no community cards yet)
-            for p in session['players']:
-                if not p[2]:
-                    try:
-                        user = p[3]
-                        hand_str = f"Your hand: {hands[p[0]][0]} {hands[p[0]][1]}\nYou have {p[1]} chips. Type your bet (10-{p[1]}) or 'fold'."
-                        await user.send(embed=discord.Embed(title="Poker Hand", description=hand_str, color=discord.Color.blue()))
-                    except Exception:
-                        pass
-            # Show current table (who is in)
-            joiners = []
-            for p in session['players']:
-                if p[2]:
-                    joiners.append(f"[BOT] {p[0]}")
-                else:
-                    joiners.append(p[3].mention)
-            await ctx.send(embed=discord.Embed(title="Poker Table Players", description="\n".join(joiners), color=discord.Color.blurple()))
-            # Collect bets
-            bets = {}
-            for p in session['players']:
-                if p[2]:
-                    if p[1] < 10:
-                        bets[p[0]] = 0
-                    else:
-                        bets[p[0]] = random.randint(10, p[1])
-                else:
-                    user = p[3]
-                    def bet_check(m):
-                        return m.author.id == user.id and isinstance(m.channel, discord.DMChannel)
-                    try:
-                        bet_msg = await self.bot.wait_for('message', check=bet_check, timeout=60)
-                        if bet_msg.content.lower() == 'fold':
-                            bets[p[0]] = 0
-                        else:
-                            bet_amt = int(bet_msg.content)
-                            if bet_amt < 10 or bet_amt > p[1]:
-                                await user.send("Invalid bet. You are folded this hand.")
-                                bets[p[0]] = 0
-                            else:
-                                bets[p[0]] = bet_amt
-                    except Exception:
-                        bets[p[0]] = 0
-            # Remove/folded players for this hand
+            def get_active_players(player_list):
+                return [p for p in player_list if p[1] > 0]
+            active_players = get_active_players(session['players'])
+            folded = set()
+            spectators = {}
+            # Pre-flop: 3 betting rounds
+            active_players, _, folded, spectators = await betting_round("Pre-Flop", 3, active_players, hands, [], folded=folded, spectators=spectators)
+            # Reveal flop
+            flop = community[:3]
+            embed = discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal())
+            await ctx.send(embed=embed)
+            for user in spectators.values():
+                try:
+                    await user.send(embed=discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal()))
+                except Exception:
+                    pass
+            await asyncio.sleep(2)
+            # Before turn: 2 betting rounds
+            active_players, _, folded, spectators = await betting_round("Before Turn", 2, active_players, hands, flop, folded=folded, spectators=spectators)
+            # Reveal turn
+            turn = community[3]
+            embed = discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal())
+            await ctx.send(embed=embed)
+            for user in spectators.values():
+                try:
+                    await user.send(embed=discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal()))
+                except Exception:
+                    pass
+            await asyncio.sleep(2)
+            # Before river: 1 betting round
+            active_players, _, folded, spectators = await betting_round("Before River", 1, active_players, hands, flop + [turn], folded=folded, spectators=spectators)
+            # Reveal river
+            river = community[4]
+            embed = discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal())
+            await ctx.send(embed=embed)
+            for user in spectators.values():
+                try:
+                    await user.send(embed=discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal()))
+                except Exception:
+                    pass
+            await asyncio.sleep(2)
+            # After river: 3 betting rounds
+            active_players, _, folded, spectators = await betting_round("After River", 3, active_players, hands, flop + [turn, river], folded=folded, spectators=spectators)
+            # Remove/cash out only players with 0 chips or who timed out (not just folded)
             leavers = []
             for i, p in enumerate(session['players']):
-                if bets.get(p[0], 0) == 0:
+                if p[1] <= 0:
                     if p[2]:
-                        if p[1] < 10:
-                            chips = p[1]
-                            dabloons = chips * 0.01
-                            conn = sqlite3.connect(db_path)
-                            c = conn.cursor()
-                            c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
-                            conn.commit()
-                            conn.close()
-                            leavers.append(f"[BOT] {p[0]} (cashed out for {dabloons:.2f} dabloons)")
+                        chips = p[1]
+                        dabloons = chips * 0.01
+                        conn = sqlite3.connect(db_path)
+                        c = conn.cursor()
+                        c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+                        conn.commit()
+                        conn.close()
+                        leavers.append(f"[BOT] {p[0]} (cashed out for {dabloons:.2f} dabloons)")
                     else:
-                        # Human: cash out on leave
                         chips = p[1]
                         dabloons = chips * 0.01
                         leavers.append(f"{p[3].mention} (cashed out for {dabloons:.2f} dabloons)")
-                        await p[3].send(embed=discord.Embed(description=f"You folded or ran out of chips and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.green()))
+                        try:
+                            await p[3].send(embed=discord.Embed(description=f"You ran out of chips and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.green()))
+                        except Exception:
+                            pass
                         conn = sqlite3.connect(db_path)
                         c = conn.cursor()
                         c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, p[0]))
                         c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
                         conn.commit()
                         conn.close()
-            # Deduct bets and add to pot
-            for i, p in enumerate(session['players']):
-                bet = bets.get(p[0], 0)
-                if bet > 0:
-                    session['players'][i] = (p[0], p[1] - bet, p[2], p[3])
-                    session['pot'] += bet
-            # Announce leavers
             if leavers:
                 await ctx.send(embed=discord.Embed(title="Players Left This Hand", description="\n".join(leavers), color=discord.Color.red()))
-            # Reveal community cards in stages
-            flop = community[:3]
-            embed = discord.Embed(title="Poker Flop", description=f"Community Cards: {' '.join(flop)}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            await asyncio.sleep(2)
-            turn = community[3]
-            embed = discord.Embed(title="Poker Turn", description=f"Community Cards: {' '.join(flop)} {turn}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            await asyncio.sleep(2)
-            river = community[4]
-            embed = discord.Embed(title="Poker River", description=f"Community Cards: {' '.join(flop)} {turn} {river}", color=discord.Color.teal())
-            await ctx.send(embed=embed)
-            await asyncio.sleep(2)
-            # Winner: highest hand value (sum of all card ranks, A=14, K=13, Q=12, J=11)
             def hand_value(cards):
                 rank_map = {str(n): n for n in range(2, 11)}
                 rank_map.update({'J': 11, 'Q': 12, 'K': 13, 'A': 14})
                 return sum(rank_map[c[:-1]] for c in cards)
             best = -1
             winners = []
-            for p in session['players']:
-                if bets.get(p[0], 0) > 0:
-                    full_hand = hands[p[0]] + community
-                    val = hand_value(full_hand)
-                    if val > best:
-                        best = val
-                        winners = [p]
-                    elif val == best:
-                        winners.append(p)
+            for p in [p for p in active_players if p[0] not in folded]:
+                full_hand = hands[p[0]] + community
+                val = hand_value(full_hand)
+                if val > best:
+                    best = val
+                    winners = [p]
+                elif val == best:
+                    winners.append(p)
             if not winners:
                 await ctx.send(embed=discord.Embed(description="No winners this hand. Pot carries over.", color=discord.Color.gold()))
+                for user in spectators.values():
+                    try:
+                        await user.send(embed=discord.Embed(description="No winners this hand. Pot carries over.", color=discord.Color.gold()))
+                    except Exception:
+                        pass
                 return
             win_chips = session['pot'] // len(winners)
             for winner in winners:
@@ -485,6 +553,11 @@ class Games(commands.Cog):
             win_mentions = ', '.join([w[3].mention if not w[2] else '[BOT]' for w in winners])
             embed = discord.Embed(title="Poker Hand Result", description=f"Winner(s): {win_mentions}\nPot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nEach wins {win_chips} chips!", color=discord.Color.green())
             await ctx.send(embed=embed)
+            for user in spectators.values():
+                try:
+                    await user.send(embed=discord.Embed(title="Poker Hand Result", description=f"Winner(s): {win_mentions}\nPot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nEach wins {win_chips} chips!", color=discord.Color.green()))
+                except Exception:
+                    pass
             session['pot'] = 0
         # Main game loop for constant mode or DM-based play
         if session.get('constant', False):
@@ -518,13 +591,36 @@ class Games(commands.Cog):
                             continue_votes += 1
                         else:
                             await p[3].send("You have left the poker game.")
+                            # Cash out on leave
+                            chips = p[1]
+                            dabloons = chips * 0.01
+                            await p[3].send(embed=discord.Embed(description=f"You have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.green()))
+                            conn = sqlite3.connect(db_path)
+                            c = conn.cursor()
+                            c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, p[0]))
+                            c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+                            conn.commit()
+                            conn.close()
                             session['players'].remove(p)
                     except Exception:
+                        # Timeout or DM error: remove and cash out
+                        chips = p[1]
+                        dabloons = chips * 0.01
+                        try:
+                            await p[3].send(embed=discord.Embed(description=f"You have been removed from the poker game due to inactivity and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.orange()))
+                        except Exception:
+                            pass
+                        conn = sqlite3.connect(db_path)
+                        c = conn.cursor()
+                        c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, p[0]))
+                        c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+                        conn.commit()
+                        conn.close()
                         session['players'].remove(p)
-                if continue_votes == 0:
-                    session['ended'] = True
-                    await ctx.send(embed=discord.Embed(description="All human players have left. Poker session ended.", color=discord.Color.gold()))
-                    break
+            if continue_votes == 0:
+                session['ended'] = True
+                await ctx.send(embed=discord.Embed(description="All human players have left. Poker session ended.", color=discord.Color.gold()))
+                return
         self.poker_sessions[guild_id] = session
 
 async def setup(bot):
