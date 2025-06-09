@@ -5,6 +5,15 @@ import sqlite3
 import os
 import asyncio
 
+def random_bot_name():
+    prefixes = ["Bot", "AI", "Auto", "Robo", "Cyber", "Mecha", "Digi", "Tech", "Nano", "Quantum"]
+    names = ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Hank", "Ivy", "Jack"]
+    lastnames = ["Smith", "Johnson", "Brown", "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin"]
+    suffexes = ["3000", "X", "Prime", "9000", "Bot", "AI", "Mark II", "v2.0", "Pro", "Elite"]
+    fullname = f"{random.choice(prefixes)} {random.choice(names)} {random.choice(lastnames)} {random.choice(suffexes)}"
+    print(fullname)
+    return fullname
+
 class Games(commands.Cog):
     """A cog to handle various games like coinflip, roll, and blackjack."""
     def __init__(self, bot):
@@ -236,7 +245,7 @@ class Games(commands.Cog):
 
     @commands.hybrid_command()
     async def poker(self, ctx, *, mode: str = None):
-        """Play a simple 5-player poker game. 5 dabloons to join, 1 chip = 0.01 dabloon. Bots fill empty seats. Cash out for dabloons. If you run out of chips, you're out! Use 'constant' to keep the table running with bots when no humans are present (devs only)."""
+        """Play a simple 5-player poker game. 5 dabloons to join, 1 chip = 0.01 dabloon. Bots fill empty seats. Cash out for dabloons. If you run out of chips, you're out! Use 'constant' to keep the table running with bots when no humans are present (devs only). Use 'true' to force constant mode (bots keep playing even if no humans)."""
         # Poker session state (per guild)
         if not hasattr(self, 'poker_sessions'):
             self.poker_sessions = {}
@@ -244,9 +253,10 @@ class Games(commands.Cog):
         session = self.poker_sessions.get(guild_id)
         db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
         user_id = ctx.author.id
-        is_constant = (mode is not None and mode.strip().lower() == "constant")
-        # Only devs/owners can start a constant session
-        if is_constant:
+        # --- Force constant mode logic ---
+        force_constant = False
+        is_constant = False
+        if mode is not None and mode.strip().lower() in ["constant", "true"]:
             config = getattr(self, 'config', getattr(self.bot, 'config', {}))
             owner_ids = config.get('BOT_OWNERS', [])
             developer_ids = config.get('BOT_DEVELOPERS', [])
@@ -254,50 +264,62 @@ class Games(commands.Cog):
             if user_id not in all_ids:
                 await ctx.send(embed=discord.Embed(description="Only bot developers or owners can start a constant poker session.", color=discord.Color.red()))
                 return
+            if mode.strip().lower() == "true":
+                force_constant = True
+            is_constant = True
         # --- Session Setup ---
         if not session or session.get('ended', False):
+            # Only allow poker in a guild, not in DMs
+            if ctx.guild is None:
+                await ctx.send(embed=discord.Embed(description="Poker can only be played in a server, not in DMs.", color=discord.Color.red()))
+                return
             session = {
                 'players': [],  # [(user_id, chips, is_bot, user_obj)]
                 'queue': [],    # [(user_id, user_obj)]
                 'pot': 0,
                 'ended': False,
-                'constant': is_constant
+                'constant': is_constant,
+                'force_constant': force_constant
             }
+            # Give 10 seconds for users to join
+            join_embed = discord.Embed(title="Poker Game Starting Soon!", description="Type `/poker` in the next 10 seconds to join this game!", color=discord.Color.gold())
+            await ctx.send(embed=join_embed)
+            await asyncio.sleep(10)
+            # After 10 seconds, check if enough players joined
             if not is_constant:
-                # Deduct 5 dabloons to join
-                conn = sqlite3.connect(db_path)
-                c = conn.cursor()
-                c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
-                c.execute("SELECT dabloons FROM users WHERE user_id = ?", (user_id,))
-                bal = c.fetchone()[0]
-                if bal < 5:
-                    await ctx.send(embed=discord.Embed(description="You need at least 5 dabloons to join poker!", color=discord.Color.red()))
+                # Deduct 5 dabloons to join for the command user if not already in
+                if not any(p[0] == user_id for p in session['players']):
+                    conn = sqlite3.connect(db_path)
+                    c = conn.cursor()
+                    c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+                    c.execute("SELECT dabloons FROM users WHERE user_id = ?", (user_id,))
+                    bal = c.fetchone()[0]
+                    if bal < 5:
+                        await ctx.send(embed=discord.Embed(description="You need at least 5 dabloons to join poker!", color=discord.Color.red()))
+                        conn.close()
+                        return
+                    c.execute("UPDATE users SET dabloons = dabloons - 5 WHERE user_id = ?", (user_id,))
+                    c.execute("UPDATE users SET dabloons = dabloons + 5 WHERE user_id = ?", (self.bot.user.id,))
+                    conn.commit()
                     conn.close()
-                    return
-                c.execute("UPDATE users SET dabloons = dabloons - 5 WHERE user_id = ?", (user_id,))
-                c.execute("UPDATE users SET dabloons = dabloons + 5 WHERE user_id = ?", (self.bot.user.id,))
-                conn.commit()
-                conn.close()
-                session['players'].append((user_id, 500, False, ctx.author))  # 500 chips = 5 dabloons
+                    session['players'].append((user_id, 500, False, ctx.author))  # 500 chips = 5 dabloons
                 # Fill with bots
-                for i in range(4):
-                    bot_id = f"bot_{i+1}"
-                    session['players'].append((bot_id, 500, True, None))
+                for i in range(5 - len(session['players'])):
+                    bot_id = f"{random_bot_name()}"
+                    session['players'].append((bot_id, 500, True, None, bot_id))
                 self.poker_sessions[guild_id] = session
-                embed = discord.Embed(title="Poker Game Started!", description=f"Players: 1 human, 4 bots. Each has 500 chips (5 dabloons).", color=discord.Color.green())
+                embed = discord.Embed(title="Poker Game Started!", description=f"Players: {len([p for p in session['players'] if not p[2]])} human(s), {len([p for p in session['players'] if p[2]])} bot(s). Each has 500 chips (5 dabloons).", color=discord.Color.green())
                 await ctx.send(embed=embed)
             else:
-                # Constant mode: all bots
                 for i in range(5):
-                    bot_id = f"bot_{i+1}"
-                    session['players'].append((bot_id, 500, True, None))
+                    bot_id = f"{random_bot_name()}"
+                    session['players'].append((bot_id, 500, True, None, bot_id))
                 self.poker_sessions[guild_id] = session
                 embed = discord.Embed(title="Constant Poker Table Started!", description=f"5 bots are playing. Humans can join at any time.", color=discord.Color.purple())
                 await ctx.send(embed=embed)
         else:
             # Session running
             if session.get('constant', False):
-                # Constant mode: allow humans to join by swapping with a bot
                 if any(p[0] == user_id for p in session['players']):
                     await ctx.send(embed=discord.Embed(description="You are already in the current poker game!", color=discord.Color.gold()))
                     return
@@ -307,7 +329,6 @@ class Games(commands.Cog):
                     bot = session['players'][idx]
                     session['players'][idx] = (user_id, 500, False, ctx.author)
                     await ctx.send(embed=discord.Embed(description="A bot has cashed out and you have joined the poker game!", color=discord.Color.green()))
-                    # Bank pays out bot's chips
                     chips = bot[1]
                     dabloons = chips * 0.01
                     conn = sqlite3.connect(db_path)
@@ -316,10 +337,14 @@ class Games(commands.Cog):
                     conn.commit()
                     conn.close()
                 else:
-                    await ctx.send(embed=discord.Embed(description="The poker game is full and no bots are present to swap.", color=discord.Color.gold()))
+                    # Add to queue if not already queued
+                    if any(q[0] == user_id for q in session['queue']):
+                        await ctx.send(embed=discord.Embed(description="You are already in the queue to join the next poker game!", color=discord.Color.gold()))
+                        return
+                    session['queue'].append((user_id, ctx.author))
+                    await ctx.send(embed=discord.Embed(description="The poker game is full and no bots are present to swap. You are in the queue.", color=discord.Color.gold()))
                 return
             else:
-                # Normal session logic
                 if any(p[0] == user_id for p in session['players']):
                     await ctx.send(embed=discord.Embed(description="You are already in the current poker game!", color=discord.Color.gold()))
                     return
@@ -340,27 +365,13 @@ class Games(commands.Cog):
                     session['players'].append((user_id, 500, False, ctx.author))
                     await ctx.send(embed=discord.Embed(description="You joined the poker game!", color=discord.Color.green()))
                 else:
+                    # Add to queue if not already queued
                     if any(q[0] == user_id for q in session['queue']):
                         await ctx.send(embed=discord.Embed(description="You are already in the queue to join the next poker game!", color=discord.Color.gold()))
                         return
                     session['queue'].append((user_id, ctx.author))
-                    bot_indices = [i for i, p in enumerate(session['players']) if p[2]]
-                    if bot_indices:
-                        idx = bot_indices[0]
-                        bot = session['players'][idx]
-                        session['players'][idx] = (user_id, 500, False, ctx.author)
-                        session['queue'].remove((user_id, ctx.author))
-                        await ctx.send(embed=discord.Embed(description="A bot has cashed out and you have joined the poker game!", color=discord.Color.green()))
-                        chips = bot[1]
-                        dabloons = chips * 0.01
-                        conn = sqlite3.connect(db_path)
-                        c = conn.cursor()
-                        c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
-                        conn.commit()
-                        conn.close()
-                    else:
-                        await ctx.send(embed=discord.Embed(description="The poker game is full and no bots are present to swap. You are in the queue.", color=discord.Color.gold()))
-                    return
+                    await ctx.send(embed=discord.Embed(description="The poker game is full. You are in the queue.", color=discord.Color.gold()))
+                return
         # --- Poker Game Logic (actual gameplay, DM-based, betting, continue) ---
         async def betting_round(round_name, num_bets, active_players, hands, community_cards, min_bet=10, folded=None, spectators=None, section_bet=False):
             """
@@ -390,18 +401,23 @@ class Games(commands.Cog):
                             actions[p[0]].append('folded')
                         else:
                             if not section_bet:
-                                action = random.choice(['bet', 'check'])
+                                # Discourage bots from folding too often: increase chance to bet/check
+                                action = random.choices(['bet', 'check', 'fold'], weights=[6, 6, 1])[0]
                                 if action == 'bet':
                                     bet_amt = random.randint(min_bet, min(p[1], 100))
                                     bets[p[0]] += bet_amt
                                     actions[p[0]].append(f"bet {bet_amt}")
                                     round_bet = True
                                     section_bet = True
-                                else:
+                                elif action == 'check':
                                     actions[p[0]].append('checked')
+                                else:
+                                    bets[p[0]] = 0
+                                    folded.add(p[0])
+                                    actions[p[0]].append('folded')
                             else:
                                 # Someone has bet in this section, so must call, raise, or fold
-                                action = random.choice(['bet', 'fold'])
+                                action = random.choices(['bet', 'fold'], weights=[4, 1])[0]
                                 if action == 'bet':
                                     bet_amt = random.randint(min_bet, min(p[1], 100))
                                     bets[p[0]] += bet_amt
@@ -417,7 +433,16 @@ class Games(commands.Cog):
                         try:
                             # Only allow check if no one has bet yet in this section
                             allow_check = not section_bet
-                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {p[1]} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{p[1]}){' or `check`' if allow_check else ''}, or 'fold'."
+                            # Use the player's actual current chip count from session['players']
+                            actual_chips = None
+                            for sp in session['players']:
+                                if sp[0] == p[0]:
+                                    actual_chips = sp[1]
+                                    break
+                            if actual_chips is None:
+                                actual_chips = p[1]  # fallback
+                            fold_warning = "\n**Warning:** Folding too often is not a winning strategy! Consider betting or checking instead."
+                            bet_prompt = f"{round_name} - Betting Round {bet_num+1}/{num_bets}\nYour hand: {hands[p[0]][0]} {hands[p[0]][1]}\nCommunity: {' '.join(community_cards) if community_cards else 'None'}\nYou have {actual_chips} chips.\nCurrent Pot: {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)\nType your bet ({min_bet}-{actual_chips}){' or `check`' if allow_check else ''}, or 'fold'.{fold_warning}"
                             await user.send(embed=discord.Embed(title="Poker Betting", description=bet_prompt, color=discord.Color.blue()))
                             def bet_check(m):
                                 return m.author.id == user.id and isinstance(m.channel, discord.DMChannel)
@@ -427,7 +452,7 @@ class Games(commands.Cog):
                                 folded.add(p[0])
                                 spectators[p[0]] = user
                                 actions[p[0]].append('folded')
-                                await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.", color=discord.Color.gold()))
+                                await user.send(embed=discord.Embed(description=f"You folded this hand. You will rejoin next hand. You are now spectating.\n**Tip:** Try not to fold too often!", color=discord.Color.gold()))
                             elif bet_msg.content.lower() == 'check' and allow_check:
                                 actions[p[0]].append('checked')
                             elif bet_msg.content.lower() == 'check' and not allow_check:
@@ -499,12 +524,12 @@ class Games(commands.Cog):
                         await user.send(embed=embed)
                     except Exception:
                         pass
-                # --- Check if only one player remains (all others folded) ---
-                remaining = [p for p in active_players if p[0] not in folded]
+                # --- Check if only one player remains (all others folded or removed) ---
+                # Only count players who are still in session['players'] and not folded and have chips > 0
+                remaining = [p for p in session['players'] if p[0] not in folded and p[1] > 0]
                 if len(remaining) == 1:
                     winner = remaining[0]
                     idx = None
-                    # Find the winner in session['players'] by user_id
                     for i, sp in enumerate(session['players']):
                         if sp[0] == winner[0]:
                             idx = i
@@ -512,7 +537,7 @@ class Games(commands.Cog):
                     if idx is not None:
                         session['players'][idx] = (winner[0], winner[1] + session['pot'], winner[2], winner[3])
                     win_mentions = winner[3].mention if not winner[2] else f"[BOT] {winner[0]}"
-                    embed = discord.Embed(title="Poker Hand Result", description=f"All other players folded! {win_mentions} wins the pot of {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)", color=discord.Color.green())
+                    embed = discord.Embed(title="Poker Hand Result", description=f"All other players folded or were removed! {win_mentions} wins the pot of {session['pot']} chips ({session['pot']*0.01:.2f} dabloons)", color=discord.Color.green())
                     await ctx.send(embed=embed)
                     for user in spectators.values():
                         try:
@@ -592,26 +617,26 @@ class Games(commands.Cog):
                         dabloons = chips * 0.01
                         conn = sqlite3.connect(db_path)
                         c = conn.cursor()
-                        c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+                        c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, self.bot.user.id))
                         conn.commit()
                         conn.close()
                         leavers.append(f"[BOT] {p[0]} (cashed out for {dabloons:.2f} dabloons)")
+                        # Remove the bot from session['players'] immediately to prevent freeze
+                        session['players'][i] = None
                     else:
                         chips = p[1]
                         dabloons = chips * 0.01
                         leavers.append(f"{p[3].mention} (cashed out for {dabloons:.2f} dabloons)")
                         try:
-                            await p[3].send(embed=discord.Embed(description=f"You ran out of chips and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.green()))
+                            await p[3].send(embed=discord.Embed(description=f"You ran out of chips!", color=discord.Color.green()))
                         except Exception:
                             pass
-                        conn = sqlite3.connect(db_path)
-                        c = conn.cursor()
-                        c.execute("UPDATE users SET dabloons = dabloons + ? WHERE user_id = ?", (dabloons, p[0]))
-                        c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
-                        conn.commit()
-                        conn.close()
+            # Remove all None entries (bots that cashed out)
+            session['players'] = [p for p in session['players'] if p is not None]
             if leavers:
                 await ctx.send(embed=discord.Embed(title="Players Left This Hand", description="\n".join(leavers), color=discord.Color.red()))
+            # Process queue after leavers
+            await self.process_queue(ctx, session, guild_id, db_path)
             def hand_value(cards):
                 rank_map = {str(n): n for n in range(2, 11)}
                 rank_map.update({'J': 11, 'Q': 12, 'K': 13, 'A': 14})
@@ -653,19 +678,28 @@ class Games(commands.Cog):
                 await play_hand_dm()
                 session['players'] = [p for p in session['players'] if p[1] > 0]
                 while len(session['players']) < 5:
-                    bot_id = f"bot_{random.randint(1000,9999)}"
+                    bot_id = f"{random_bot_name()}-{random.randint(1000,9999)}"
                     session['players'].append((bot_id, 500, True, None))
+                # Process queue after each hand
+                await self.process_queue(ctx, session, guild_id, db_path)
                 await asyncio.sleep(5)
+                # If force_constant is not set and there are no humans, end session
+                if not session.get('force_constant', False):
+                    humans = [p for p in session['players'] if not p[2]]
+                    if not humans:
+                        session['ended'] = True
+                        await ctx.send(embed=discord.Embed(description="All human players have left. Poker session ended.", color=discord.Color.gold()))
+                        break
         else:
             playing = True
             while playing and not session.get('ended', False):
                 try:
                     await play_hand_dm()
                 except StopAsyncIteration:
-                    # Custom signal to break out of the hand loop and end the hand
                     break
-                # Remove players with 0 chips
                 session['players'] = [p for p in session['players'] if p[1] > 0]
+                # Process queue after each hand
+                await self.process_queue(ctx, session, guild_id, db_path)
                 # DM all humans to ask if they want to continue
                 humans = [p for p in session['players'] if not p[2]]
                 if not humans:
@@ -699,7 +733,7 @@ class Games(commands.Cog):
                         chips = p[1]
                         dabloons = chips * 0.01
                         try:
-                            await p[3].send(embed=discord.Embed(description=f"You have been removed from the poker game due to inactivity and have cashed out for {dabloons:.2f} dabloons!", color=discord.Color.orange()))
+                            await p[3].send(embed=discord.Embed(description=f"You have been removed from the poker game due to inactivity and have been forced to cash out for {dabloons:.2f} dabloons!", color=discord.Color.orange()))
                         except Exception:
                             pass
                         conn = sqlite3.connect(db_path)
@@ -713,7 +747,66 @@ class Games(commands.Cog):
                 session['ended'] = True
                 await ctx.send(embed=discord.Embed(description="All human players have left. Poker session ended.", color=discord.Color.gold()))
                 return
-        self.poker_sessions[guild_id] = session
+
+    async def process_queue(self, ctx, session, guild_id, db_path):
+        """
+        Process the poker queue: if there are users in the queue and seats available (or bots to swap), add them in order.
+        """
+        changed = False
+        queue = session.get('queue', [])
+        players = session.get('players', [])
+        max_players = 5
+        while queue and len(players) < max_players:
+            user_id, user_obj = queue.pop(0)
+            # Deduct 5 dabloons to join
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("SELECT dabloons FROM users WHERE user_id = ?", (user_id,))
+            bal = c.fetchone()[0]
+            if bal < 5:
+                try:
+                    await user_obj.send(embed=discord.Embed(description="You need at least 5 dabloons to join poker! You have been removed from the queue.", color=discord.Color.red()))
+                except Exception:
+                    pass
+                conn.close()
+                continue
+            c.execute("UPDATE users SET dabloons = dabloons - 5 WHERE user_id = ?", (user_id,))
+            c.execute("UPDATE users SET dabloons = dabloons + 5 WHERE user_id = ?", (self.bot.user.id,))
+            conn.commit()
+            conn.close()
+            players.append((user_id, 500, False, user_obj))
+            changed = True
+            try:
+                await user_obj.send(embed=discord.Embed(description="You have joined the poker game from the queue!", color=discord.Color.green()))
+            except Exception:
+                pass
+        # If still users in queue and table is full, try to swap with bots
+        while queue and all(not p[2] for p in players) == False:
+            user_id, user_obj = queue[0]
+            bot_indices = [i for i, p in enumerate(players) if p[2]]
+            if not bot_indices:
+                break
+            idx = bot_indices[0]
+            bot = players[idx]
+            players[idx] = (user_id, 500, False, user_obj)
+            queue.pop(0)
+            changed = True
+            chips = bot[1]
+            dabloons = chips * 0.01
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
+            conn.commit()
+            conn.close()
+            try:
+                await user_obj.send(embed=discord.Embed(description="A bot has cashed out and you have joined the poker game from the queue!", color=discord.Color.green()))
+            except Exception:
+                pass
+        session['players'] = players
+        session['queue'] = queue
+        if changed:
+            await ctx.send(embed=discord.Embed(description="The poker queue has been processed. New players have joined if seats were available.", color=discord.Color.green()))
 
 async def setup(bot):
     await bot.add_cog(Games(bot))
