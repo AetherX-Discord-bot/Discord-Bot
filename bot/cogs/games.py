@@ -251,6 +251,26 @@ class Games(commands.Cog):
             self.poker_sessions = {}
         guild_id = ctx.guild.id if ctx.guild else ctx.author.id
         session = self.poker_sessions.get(guild_id)
+        # Check if a dev/admin wants to disable constant mode
+        if session and session.get('constant', False) and mode is not None and mode.strip().lower() == "false":
+            config = getattr(self, 'config', getattr(self.bot, 'config', {}))
+            owner_ids = config.get('BOT_OWNERS', [])
+            developer_ids = config.get('BOT_DEVELOPERS', [])
+            all_ids = set(owner_ids + developer_ids)
+            if user_id in all_ids:
+                session['constant'] = False
+                session['force_constant'] = False
+                await ctx.send(embed=discord.Embed(
+                    description="Constant Poker Table has been disabled by a developer/admin. The table will now play like a normal game.",
+                    color=discord.Color.orange()
+                ))
+                self.poker_sessions[guild_id] = session  # Save change
+            else:
+                await ctx.send(embed=discord.Embed(
+                    description="Only bot developers or owners can disable constant poker mode.",
+                    color=discord.Color.red()
+                ))
+                return
         db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
         user_id = ctx.author.id
         # --- Force constant mode logic ---
