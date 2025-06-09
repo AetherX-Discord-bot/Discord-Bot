@@ -281,10 +281,20 @@ class Games(commands.Cog):
                 'constant': is_constant,
                 'force_constant': force_constant
             }
-            # Give 10 seconds for users to join
-            join_embed = discord.Embed(title="Poker Game Starting Soon!", description="Type `/poker` in the next 10 seconds to join this game!", color=discord.Color.gold())
+            # Give 10 seconds for users to join (even in constant mode)
+            join_embed = discord.Embed(title="Poker Game Starting Soon!", description="Type `/poker` in the next 10 seconds to join this game! Type 'quit' in the channel to cancel your join.", color=discord.Color.gold())
             await ctx.send(embed=join_embed)
-            await asyncio.sleep(10)
+            quit_flag = False
+            def quit_check(m):
+                return m.author.id == user_id and m.channel == ctx.channel and m.content.strip().lower() == 'quit'
+            try:
+                await asyncio.wait_for(self.bot.wait_for('message', check=quit_check), timeout=10)
+                quit_flag = True
+            except asyncio.TimeoutError:
+                pass
+            if quit_flag:
+                await ctx.send(embed=discord.Embed(description="You have cancelled your join request for poker.", color=discord.Color.orange()))
+                return
             # After 10 seconds, check if enough players joined
             if not is_constant:
                 # Deduct 5 dabloons to join for the command user if not already in
@@ -498,6 +508,13 @@ class Games(commands.Cog):
                             c.execute("UPDATE users SET dabloons = dabloons - ? WHERE user_id = ?", (dabloons, self.bot.user.id))
                             conn.commit()
                             conn.close()
+                            # Remove player from session['players'] if in constant mode
+                            if session.get('constant', False):
+                                session['players'] = [sp for sp in session['players'] if sp[0] != p[0]]
+                                # Fill empty slots with bots immediately
+                                while len(session['players']) < 5:
+                                    bot_id = f"{random_bot_name()}-{random.randint(1000,9999)}"
+                                    session['players'].append((bot_id, 500, True, None))
                 # Deduct bets and add to pot
                 for i, p in enumerate(session['players']):
                     if p[0] not in folded:
