@@ -4,7 +4,7 @@
   "BOT_PREFIX": "!",
   "BOT_OWNERS": [1286383453016686705, 1289527748548759573],
   "BANK_TELLERS": [1234567890, 9876543210],
-  "HELP_COMMAND_TYPE": "old aetherx",
+
   "BOT_ACTIVITY": "Getting coded by Lmutt090",
   "BOT_ACTIVITY_TYPE": "custom",
   "BOT_STATUS": "dnd",
@@ -12,8 +12,7 @@
   "BOT_SUPPORT_SERVER": "https://discord.gg/yFY8Fnbtp9",
   "BOT_INVITE_URL": "https://discord.com/api/oauth2/authorize?client_id=1067646246254284840&permissions=8&scope=bot%20applications.commands",
   "CONSOLE_STARTUP_MESSAGE_WATERMARK_ALLOWED": true,
-  "AUTOMATIC_UPDATES": true,
-  "AUTOMATIC_UPDATES_CHANNEL": "stable",
+
   "GITHUB_REPOSITORY_URL": "https://github.dev/AetherX-Discord-bot/Discord-Bot",
   "LOAD_ALL_COGS": true,
   "COG WHITELIST": [],
@@ -21,6 +20,5 @@
   "CUSTOM_COGS_AUTOMATICALLY_LOADED": true,
   "CUSTOM_COGS_BLACKLIST": ["customcogexample"],
   "CUSTOM_COGS_WHITELIST": [""],
-  "BYPASS_FORCED_BOTMANAGEMENT.PY": false,
-  "DATABASE_ENABLED": true
+  "BYPASS_FORCED_BOTMANAGEMENT.PY": false
 }
