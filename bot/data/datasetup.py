@@ -31,5 +31,34 @@ def setup_database():
     conn.close()
 
 if __name__ == "__main__":
-    setup_database()
-    print(f"Database setup complete. Database file: {DB_PATH}")
+    def has_data():
+        if not os.path.exists(DB_PATH):
+            return False
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM servers LIMIT 1")
+            if c.fetchone():
+                conn.close()
+                return True
+            c.execute("SELECT 1 FROM users LIMIT 1")
+            if c.fetchone():
+                conn.close()
+                return True
+            conn.close()
+        except Exception:
+            return False
+        return False
+
+    if os.path.exists(DB_PATH) and has_data():
+        confirm = input(f"Database already exists at {DB_PATH} and contains data. Do you want to reset it? (y/n): ").strip().lower()
+        if confirm == 'y':
+            os.remove(DB_PATH)
+            print("Database file removed. Setting up a new database...")
+            setup_database()
+            print(f"Database reset complete. Database file: {DB_PATH}")
+        else:
+            print("Database setup aborted. Existing database was not changed.")
+    else:
+        setup_database()
+        print(f"Database setup complete. Database file: {DB_PATH}")
