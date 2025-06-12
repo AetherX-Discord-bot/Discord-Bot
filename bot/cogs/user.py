@@ -193,7 +193,7 @@ class User(commands.Cog):
                     embed = discord.Embed(title=f"{interaction.user.display_name}'s Settings", color=discord.Color.green())
                     embed.add_field(name="Prefix", value=updated[0] or "Default", inline=True)
                     embed.add_field(name="Bio", value=updated[1] or "No bio set.", inline=False)
-                    embed.add_field(name="Profile Picture", value=updated[2] or "Not set", inline=False)
+                    embed.add_field(name="Profile Picture", value=updated[2] or "Still using your Discord profile picture.", inline=False)
                     embed.add_field(name="DM Enabled", value="Yes" if updated[3] else "No", inline=True)
                     embed.add_field(name="Show Status", value="Yes" if updated[4] else "No", inline=True)
                     embed.add_field(name="Show Dabloons", value="Yes" if updated[5] else "No", inline=True)
