@@ -23,7 +23,39 @@ def setup_database():
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            dabloons REAL DEFAULT 0
+            personal_prefix TEXT,
+            bio TEXT,
+            profile_picture TEXT,
+            dm_enabled BOOLEAN DEFAULT 1,
+            show_status BOOLEAN DEFAULT 1,
+            show_dabloons BOOLEAN DEFAULT 0,
+            dabloons REAL DEFAULT 0,
+            karma INTEGER DEFAULT 0,
+            xp REAL DEFAULT 0,
+            level INTEGER DEFAULT 1
+        )
+    ''')
+
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS server_settings (
+            server_id INTEGER PRIMARY KEY,
+            prefix TEXT,
+            welcome_channel_id INTEGER,
+            welcome_message TEXT,
+            leveling_channel_id INTEGER,
+            leveling_message TEXT,
+            leveling_xp_per_message INTEGER DEFAULT 10,
+            leveling_xp_per_reaction INTEGER DEFAULT 5,
+            leveling_xp_per_command INTEGER DEFAULT 0
+        )
+    ''')
+    
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS server_leveling (
+            server_id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            xp INTEGER DEFAULT 0,
+            level INTEGER DEFAULT 1
         )
     ''')
 

@@ -3,6 +3,8 @@ from discord.ext import commands
 import sys
 import sqlite3
 import os
+import subprocess
+import asyncio
 
 def is_developer_or_owner():
     async def predicate(ctx):
@@ -56,6 +58,7 @@ class BotManagement(commands.Cog):
     @is_developer_or_owner()
     async def restart(self, ctx):
         """Restart the bot."""
+        print(f"Restarting bot, initiated by {ctx.author} ({ctx.author.id})")
         embed = discord.Embed(
             title="Bot Restarting",
             description=f"Restart initiated by ||{ctx.author.mention} ({ctx.author.id}). Notifying all developers and owners...||",
@@ -81,15 +84,24 @@ class BotManagement(commands.Cog):
                     notified.append(user_id)
             except Exception:
                 continue  # Skip if failed to notify
-        import os
+        print(f"Notified developers and owners: {notified}")
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     @commands.command(aliases=["synccommands", "syncslash", "syncglobal"])
     @is_developer_or_owner()
     async def sync(self, ctx):
-        """Sync slash commands to all servers."""
-        synced = await self.bot.tree.sync()
-        await ctx.send(f"Synced {len(synced)} commands globally.")
+        """Sync slash commands to all servers, slowly to avoid rate limiting."""
+        await ctx.send("Starting slow sync of slash commands to all servers...")
+        synced_count = 0
+        for guild in self.bot.guilds:
+            try:
+                await self.bot.tree.sync(guild=guild)
+                synced_count += 1
+                await ctx.send(f"Synced commands to: {guild.name} (ID: {guild.id})")
+                await asyncio.sleep(2)
+            except Exception as e:
+                await ctx.send(f"Failed to sync commands to {guild.name} (ID: {guild.id}): {e}")
+        await ctx.send(f"Finished syncing commands to {synced_count} servers.")
 
     @commands.command(aliases=["loadcog", "loadextension"])
     @is_developer_or_owner()
@@ -280,6 +292,21 @@ class BotManagement(commands.Cog):
                     await ctx.send(f"Server {server_id} has been blacklisted. The bot is not currently in that server.")
         except Exception as e:
             await ctx.send(f"Failed to toggle blacklist for server: {e}")
+
+    @commands.command(aliases=["recreatedb"])
+    @is_developer_or_owner()
+    async def resetdatabase(self, ctx):
+        """Reset the bot's database."""
+        try:
+            if not os.path.exists(self.db_path):
+                await ctx.send("Database does not exist. No reset needed.")
+                return
+            os.remove(self.db_path)
+            await ctx.send("Database has been reset successfully.")
+        except Exception as e:
+            await ctx.send(f"Failed to reset database: {e}")
+        # Run datasetup.py to recreate the database
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), '..', 'data', 'datasetup.py')])
 
 async def setup(bot):
     await bot.add_cog(BotManagement(bot))

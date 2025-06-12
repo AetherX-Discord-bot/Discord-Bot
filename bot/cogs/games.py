@@ -288,6 +288,83 @@ class Games(commands.Cog):
                     color=discord.Color.red()
                 ))
                 return
+        elif mode is not None and mode.strip().lower() in ["how", "rules", "h", "r", "help"]:
+            # Show poker rules/how-to if requested
+            embed = discord.Embed(
+                title="Poker Basics (Texas Hold'em)",
+                description=(
+                    "**Objective**: Make the best five-card hand or bluff opponents into folding.\n\n"
+                    "**Setup**:\n"
+                    "- Each player gets 2 private cards (\"hole cards\")\n"
+                    "- 5 community cards dealt face-up (flop: 3, turn: 1, river: 1)\n\n"
+                    "**Betting Rounds**:\n"
+                    "1. **Preflop**: Bet after receiving hole cards\n"
+                    "2. **Flop**: Bet after 3 community cards\n"
+                    "3. **Turn**: Bet after 4th card\n"
+                    "4. **River**: Final bet after 5th card\n\n"
+                    "**Winning**: Best hand wins or last remaining player takes the pot\n"
+                ),
+                color=discord.Color.blue()
+            )
+            embed.add_field(
+                name="Hand Rankings (High to Low)",
+                value=(
+                    "- **Royal Flush**: A-K-Q-J-10 (same suit)\n"
+                    "- **Straight Flush**: 5 consecutive (same suit)\n"
+                    "- **Four of a Kind**\n"
+                    "- **Full House**: 3 + 2 of a kind\n"
+                    "- **Flush**: 5 same suit\n"
+                    "- **Straight**: 5 consecutive\n"
+                    "- **Three of a Kind**\n"
+                    "- **Two Pair**\n"
+                    "- **One Pair**\n"
+                    "- **High Card**"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="Tips",
+                value=(
+                    "- **Bluff**: Bet strong hands to scare opponents\n"
+                    "- **Position**: Play stronger hands in early position\n"
+                    "- **Reading Opponents**: Watch betting patterns\n"
+                    "- **Bankroll Management**: Don't risk more than you can afford to lose"
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="Joining",
+                value=(
+                    "Type `/poker` to join a game. You need at least 5 dabloons to play.\n"
+                    "Bots will fill empty seats. (Bots are completly random; bet: 6, check: 6, fold: 1) If you run out of chips, you're out!\n"
+                    "You will join with 500 chips, which is equivalent to 5 dabloons.\n"
+                    "If you try to join in the middle of a game or it's full of human players, you will be put into a queue."
+                ),
+                inline=False
+            )
+            embed.add_field(
+                name="Our set limitations",
+                value=(
+                    "- **Max Players**: 5 players per game\n"
+                    "- **Game Duration**: 10 seconds to join, 5 minutes per hand\n"
+                    "- **Server Limit**: Only one poker game per server at a time"
+                )
+            )
+            embed.add_field(
+                name="Discord Limitations",
+                value=(
+                "- **DMs**: Poker can only be played in servers, not in DMs.\n"
+                "- **Rate Limiting**: We may be rate limited causing the game to break, if that happens just wait for a timeout."
+                )
+            )
+            embed.add_field(
+                name="",
+                value="-# For strategies/variations, check out the [Upswing Poker Guide](https://upswingpoker.com/quick-poker-tips-texas-holdem/).", 
+                inline=False
+            )
+            await ctx.send(embed=embed)
+            return
+
         # --- Session Setup ---
         if not session or session.get('ended', False):
             # Only allow poker in a guild, not in DMs

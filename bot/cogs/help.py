@@ -50,12 +50,18 @@ class Uncatagorized(commands.Cog):
             embed.set_footer(text=f"Requested by {ctx.author}")
             await ctx.send(embed=embed)
             return
-        # If a cog name is passed, show commands for that cog
+        # If a cog name is passed, show commands for that cog, with pagination support
         if arg:
-            cog = self.bot.cogs.get(arg)
+            import re
+            match = re.match(r"([a-zA-Z0-9_]+)(\d+)?$", arg.strip())
+            if match:
+                cog_arg = match.group(1)
+            else:
+                cog_arg = arg
+            cog = self.bot.cogs.get(cog_arg)
             if not cog:
                 # Try case-insensitive match
-                cog = next((c for n, c in self.bot.cogs.items() if n.lower() == arg.lower()), None)
+                cog = next((c for n, c in self.bot.cogs.items() if n.lower() == cog_arg.lower()), None)
             if cog:
                 commands_list = []
                 for cmd in cog.get_commands():
@@ -67,14 +73,56 @@ class Uncatagorized(commands.Cog):
                         except Exception:
                             continue
                 if commands_list:
-                    embed.title = f"{getattr(cog, 'qualified_name', arg)} Commands"
-                    embed.description = getattr(cog, '__doc__', None) or "No description."
-                    embed.add_field(name="Commands", value="\n".join(commands_list), inline=False)
-                    embed.set_footer(text=f"Requested by {ctx.author}")
-                    await ctx.send(embed=embed)
+                    max_per_page = 10
+                    total_pages = (len(commands_list) + max_per_page - 1) // max_per_page
+                    page = 1
+                    def get_embed(page):
+                        embed = discord.Embed(
+                            title=f"{getattr(cog, 'qualified_name', cog_arg)} Commands (Page {page})",
+                            description=getattr(cog, '__doc__', None) or "No description.",
+                            color=discord.Color.green()
+                        )
+                        start = (page - 1) * max_per_page
+                        end = start + max_per_page
+                        chunk = commands_list[start:end]
+                        embed.add_field(
+                            name=f"Commands {start+1}-{min(end, len(commands_list))} of {len(commands_list)}",
+                            value="\n".join(chunk),
+                            inline=False
+                        )
+                        if total_pages > 1:
+                            embed.set_footer(text=f"Requested by {ctx.author} | Page {page}/{total_pages}")
+                        else:
+                            embed.set_footer(text=f"Requested by {ctx.author}")
+                        return embed
+                    class HelpView(View):
+                        def __init__(self, *, timeout=60):
+                            super().__init__(timeout=timeout)
+                            self.page = 1
+                        async def update(self, interaction):
+                            await interaction.response.edit_message(embed=get_embed(self.page), view=self)
+                        @discord.ui.button(label='Previous', style=discord.ButtonStyle.primary, disabled=True)
+                        async def previous(self, interaction: discord.Interaction, button: Button):
+                            self.page -= 1
+                            self.next.disabled = False
+                            if self.page == 1:
+                                button.disabled = True
+                            await self.update(interaction)
+                        @discord.ui.button(label='Next', style=discord.ButtonStyle.primary, disabled=(total_pages <= 1))
+                        async def next(self, interaction: discord.Interaction, button: Button):
+                            self.page += 1
+                            self.previous.disabled = False
+                            if self.page == total_pages:
+                                button.disabled = True
+                            await self.update(interaction)
+                    view = HelpView()
+                    if total_pages == 1:
+                        view.previous.disabled = True
+                        view.next.disabled = True
+                    await ctx.send(embed=get_embed(1), view=view)
                     return
                 else:
-                    embed = discord.Embed(description=f"No commands available in cog '{arg}' for you.", color=discord.Color.red())
+                    embed = discord.Embed(description=f"No commands available in cog '{cog_arg}' for you.", color=discord.Color.red())
                     await ctx.send(embed=embed)
                     return
             else:
@@ -97,9 +145,13 @@ class Uncatagorized(commands.Cog):
                 cog_desc = getattr(cog, '__doc__', None) or "No description."
                 shown_cmds = commands_list[:max_per_cog]
                 more = f" (+{len(commands_list) - max_per_cog} more...)" if len(commands_list) > max_per_cog else ""
+                value = f"{cog_desc}\nCommands: {', '.join(shown_cmds)}{more}"
+                # If too many commands, add a button for full list
+                if len(commands_list) > max_per_cog:
+                    value += f"\nUse `!help {cog_name}` to see all commands in this category."
                 embed.add_field(
                     name=f"{getattr(cog, 'qualified_name', cog_name)}",
-                    value=f"{cog_desc}\nCommands: {', '.join(shown_cmds)}{more}",
+                    value=value,
                     inline=False
                 )
         # Also include uncategorized commands (not in a cog)

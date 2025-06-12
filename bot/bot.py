@@ -3,6 +3,9 @@ from discord.ext import commands, tasks
 import os
 import json
 import asyncio
+import sqlite3
+from pathlib import Path
+import importlib
 
 # Load config.json
 with open(os.path.join(os.path.dirname(__file__), 'config.json')) as f:
@@ -18,8 +21,6 @@ CUSTOM_COGS_BLACKLIST = config.get('CUSTOM_COGS_BLACKLIST', [])
 CUSTOM_COGS_AUTOMATICALLY_LOADED = config.get('CUSTOM_COGS_AUTOMATICALLY_LOADED', True)
 
 async def load_cogs(bot):
-    from pathlib import Path
-    import importlib
     cogs_dir = Path(__file__).parent / 'cogs'
     for file in cogs_dir.glob('*.py'):
         if file.name.startswith('_'):
@@ -72,9 +73,32 @@ def is_developer_or_owner_id(user_id):
     all_ids = set(owner_ids + developer_ids)
     return user_id in all_ids
 
-# Get command prefix from config, default to '!'
+# Get command prefix from config, default to '!'. If in a guild, use the server's prefix from the database if set.
 def get_prefix(bot, message):
     prefix = config.get('BOT_PREFIX', '!').strip()
+    # User prefix overrides guild prefix
+    if message.guild:
+        db_path = os.path.join(os.path.dirname(__file__), 'data', 'database.db')
+        user_prefix = None
+        try:
+            conn = sqlite3.connect(db_path)
+            c = conn.cursor()
+            # Check for user-specific prefix
+            c.execute("SELECT personal_prefix FROM users WHERE user_id = ?", (message.author.id,))
+            user_row = c.fetchone()
+            if user_row and user_row[0]:
+                user_prefix = user_row[0]
+            # If no user prefix, check for server prefix
+            if not user_prefix:
+                c.execute("SELECT prefix FROM server_settings WHERE server_id = ?", (message.guild.id,))
+                row = c.fetchone()
+                if row and row[0]:
+                    prefix = row[0]
+            conn.close()
+        except Exception:
+            pass
+        if user_prefix:
+            prefix = user_prefix
     return commands.when_mentioned_or(prefix)(bot, message)
 
 def get_presence():
