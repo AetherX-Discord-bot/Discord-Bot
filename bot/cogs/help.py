@@ -170,6 +170,25 @@ class Uncatagorized(commands.Cog):
         embed.set_footer(text=f"Requested by {ctx.author}")
         await ctx.send(embed=embed)
 
+    @commands.command(name="introduction", description="What to do next?", hidden=True)
+    async def whattodo(self, ctx):
+        """Provide a message to guide users on what to do next."""
+        embed = discord.Embed(
+            title="What to do next?",
+            description="Use `!help <cog>` to see commands in a specific category, or `!help list` for all commands.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(
+            name="Setting up your profile",
+            value="Use `!settings` to set up your profile."
+        )
+        embed.add_field(
+            name="Seeing profiles",
+            value="Use `!profile <user>` to see a user's profile."
+        )
+        embed.set_footer(text=f"Requested by {ctx.author}")
+        await ctx.send(embed=embed)
+
     # Override the default help command
     def cog_unload(self):
         self.bot.help_command = self._original_help_command

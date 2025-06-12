@@ -65,7 +65,7 @@ class User(commands.Cog):
 
     @commands.hybrid_command()
     async def settings(self, ctx, setting: str = None, value: str = None):
-        """View or change your user settings. Usage: settings <setting> <value>"""
+        """View or change your user settings."""
         valid_settings = [
             "personal_prefix", "bio", "profile_picture", "dm_enabled", "show_status", "show_dabloons"
         ]
