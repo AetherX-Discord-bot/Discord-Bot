@@ -101,6 +101,13 @@ class User(commands.Cog):
                     self.user_id = user_id
                     self.current_settings = current_settings
 
+                async def on_error(self, interaction: discord.Interaction, error: Exception, item, /) -> None:
+                    print(f"Interaction error in SettingsView: {error}")
+                    await interaction.response.send_message(
+                        "An error occurred while processing your interaction. Please try again later.",
+                        ephemeral=True
+                    )
+
                 @discord.ui.button(label="Toggle DM Enabled", style=discord.ButtonStyle.primary)
                 async def toggle_dm(self, interaction: discord.Interaction, button: discord.ui.Button):
                     await self.toggle_setting(interaction, 'dm_enabled')
@@ -139,6 +146,16 @@ class User(commands.Cog):
                     conn.commit()
                     c.execute("SELECT personal_prefix, bio, profile_picture, dm_enabled, show_status, show_dabloons FROM users WHERE user_id = ?", (self.user_id,))
                     updated = c.fetchone()
+                    if not updated:
+                        # Add user to database if not found
+                        c.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (self.user_id,))
+                        conn.commit()
+                        c.execute("SELECT personal_prefix, bio, profile_picture, dm_enabled, show_status, show_dabloons FROM users WHERE user_id = ?", (self.user_id,))
+                        updated = c.fetchone()
+                        if not updated:
+                            conn.close()
+                            await interaction.response.send_message("User could not be added to the database.", ephemeral=True)
+                            return
                     conn.close()
                     embed = discord.Embed(title=f"{interaction.user.display_name}'s Settings", color=discord.Color.green())
                     embed.add_field(name="Prefix", value=updated[0] or "Default", inline=True)
@@ -163,6 +180,13 @@ class User(commands.Cog):
                     self.prompt = prompt
                     self.input = discord.ui.TextInput(label=prompt, style=discord.TextStyle.short, required=True)
                     self.add_item(self.input)
+
+                async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+                    print(f"Interaction error in SettingsModal: {error}")
+                    await interaction.response.send_message(
+                        "An error occurred while processing your input. Please try again later.",
+                        ephemeral=True
+                    )
 
                 async def on_submit(self, interaction: discord.Interaction):
                     value = self.input.value.strip()
@@ -189,8 +213,18 @@ class User(commands.Cog):
                     conn.commit()
                     c.execute("SELECT personal_prefix, bio, profile_picture, dm_enabled, show_status, show_dabloons FROM users WHERE user_id = ?", (self.view.user_id,))
                     updated = c.fetchone()
+                    if not updated:
+                        # Add user to database if not found
+                        c.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (self.view.user_id,))
+                        conn.commit()
+                        c.execute("SELECT personal_prefix, bio, profile_picture, dm_enabled, show_status, show_dabloons FROM users WHERE user_id = ?", (self.view.user_id,))
+                        updated = c.fetchone()
+                        if not updated:
+                            conn.close()
+                            await interaction.response.send_message("User could not be added to the database.", ephemeral=True)
+                            return
                     conn.close()
-                    embed = discord.Embed(title=f"{interaction.user.display_name}'s Settings", color=discord.Color.green())
+                    embed = discord.Embed(title=f"{interaction.user_display_name}'s Settings", color=discord.Color.green())
                     embed.add_field(name="Prefix", value=updated[0] or "Default", inline=True)
                     embed.add_field(name="Bio", value=updated[1] or "No bio set.", inline=False)
                     embed.add_field(name="Profile Picture", value=updated[2] or "Still using your Discord profile picture.", inline=False)
