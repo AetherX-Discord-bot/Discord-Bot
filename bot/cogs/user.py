@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import sqlite3
 import os
+import re
 
 class User(commands.Cog):
     """A cog for user profile and settings management."""
@@ -165,6 +166,23 @@ class User(commands.Cog):
 
                 async def on_submit(self, interaction: discord.Interaction):
                     value = self.input.value.strip()
+                    # Sanitize input
+                    if self.setting == 'personal_prefix':
+                        value = value[:10]  # Limit prefix length
+                        value = value.replace('\n', '').replace('\r', '')
+                    elif self.setting == 'bio':
+                        value = value[:200]  # Limit bio length
+                        value = value.replace('\r', '').replace('\n', ' ')
+                    elif self.setting == 'profile_picture':
+                        value = value[:200]  # Limit URL length
+                        value = value.replace('\n', '').replace('\r', '')
+                        url_pattern = re.compile(r"^(https?://)[^\s]+\.(jpg|jpeg|png|gif|webp)$", re.IGNORECASE)
+                        if not url_pattern.match(value):
+                            await interaction.response.send_message("Invalid image URL. Please provide a direct link to an image.", ephemeral=True)
+                            return
+                    else:
+                        value = value[:100]
+                        value = value.replace('\n', '').replace('\r', '')
                     conn = sqlite3.connect(self.view.cog.db_path)
                     c = conn.cursor()
                     c.execute(f"UPDATE users SET {self.setting} = ? WHERE user_id = ?", (value, self.view.user_id))
