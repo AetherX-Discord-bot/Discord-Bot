@@ -69,7 +69,7 @@ class Uncatagorized(commands.Cog):
                         try:
                             if await cmd.can_run(ctx):
                                 aliases = f" (aliases: {', '.join(cmd.aliases)})" if getattr(cmd, 'aliases', None) else ""
-                                commands_list.append(f"{cmd.name}{aliases} - {cmd.help or 'No description.'}")
+                                commands_list.append(f"- **{cmd.name}**{aliases} - {cmd.help or '__***No description.***__'}")
                         except Exception:
                             continue
                 if commands_list:
