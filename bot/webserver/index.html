@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; }
+    .hidden { display: none; }
+    .error { color: red; }
+    .success { color: green; }
+    label { display: block; margin-top: 1em; }
+    input, select, button { margin-top: 0.5em; }
+  </style>
+</head>
+<body>
+  <h1>Bot Dashboard</h1>
+  <div id="login">
+    <label>OAuth2 Token: <input type="password" id="token"></label>
+    <button onclick="login()">Login</button>
+    <div id="login-error" class="error hidden"></div>
+  </div>
+  <div id="dashboard" class="hidden">
+    <h2>Manage Server</h2>
+    <label>Guild ID: <input type="text" id="guildId"></label>
+    <button onclick="loadSettings()">Load Settings</button>
+    <div id="settings"></div>
+    <div id="members"></div>
+  </div>
+  <script>
+    let ws;
+    let token = '';
+    function login() {
+      token = document.getElementById('token').value;
+      if (!token) {
+        showError('login-error', 'Token required');
+        return;
+      }
+      document.getElementById('login').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+    }
+    function showError(id, msg) {
+      const el = document.getElementById(id);
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+    function clearError(id) {
+      const el = document.getElementById(id);
+      el.textContent = '';
+      el.classList.add('hidden');
+    }
+    function loadSettings() {
+      clearError('login-error');
+      const guildId = document.getElementById('guildId').value;
+      if (!guildId) {
+        showError('login-error', 'Guild ID required');
+        return;
+      }
+      if (!ws || ws.readyState !== 1) {
+        ws = new WebSocket(`ws://${window.location.hostname}:8765`);
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'get-guild-settings', token, guildId }));
+          ws.send(JSON.stringify({ type: 'get-guild-members', token, guildId }));
+        };
+        ws.onmessage = handleMessage;
+        ws.onerror = (e) => showError('login-error', 'WebSocket error');
+      } else {
+        ws.send(JSON.stringify({ type: 'get-guild-settings', token, guildId }));
+        ws.send(JSON.stringify({ type: 'get-guild-members', token, guildId }));
+      }
+    }
+    function handleMessage(event) {
+      const data = JSON.parse(event.data);
+      if (data.type === 'guild-settings') {
+        renderSettings(data);
+      } else if (data.type === 'guild-members') {
+        renderMembers(data);
+      } else if (data.type === 'guild-settings-updated') {
+        alert('Settings updated!');
+      } else if (data.type === 'error') {
+        showError('login-error', data.message);
+      }
+    }
+    function renderSettings(data) {
+      const settingsDiv = document.getElementById('settings');
+      let iconHtml = '';
+      if (data.guildInfo && data.guildInfo.icon_url) {
+        iconHtml = `<img src="${data.guildInfo.icon_url}" alt="icon" style="width:64px;height:64px;border-radius:50%;vertical-align:middle;">`;
+      }
+      settingsDiv.innerHTML = `
+        <div style="display:flex;align-items:center;gap:1em;">
+          ${iconHtml}
+          <h3 style="display:inline;">${data.guildInfo ? data.guildInfo.name : 'Guild ' + data.guildId}</h3>
+        </div>
+        <label>Prefix: <input id="prefix" value="${data.settings.settings.prefix}"></label>
+        <label>Welcome Message: <input id="welcome" value="${data.settings.settings.welcomeMessage}"></label>
+        <button onclick="updateSettings()">Save</button>`;
+    }
+    function updateSettings() {
+      const guildId = document.getElementById('guildId').value;
+      const prefix = document.getElementById('prefix').value;
+      const welcome = document.getElementById('welcome').value;
+      ws.send(JSON.stringify({ type: 'update-guild-settings', token, guildId, newSettings: { prefix, welcomeMessage: welcome } }));
+    }
+    function renderMembers(data) {
+      const membersDiv = document.getElementById('members');
+      if (!data.members) {
+        membersDiv.innerHTML = '<p>No member data available or insufficient permissions.</p>';
+        return;
+      }
+      let html = `<h3>Members</h3><ul>`;
+      for (const m of data.members) {
+        html += `<li>${m.username}#${m.discriminator} (${m.id}) <button onclick="kickMember('${m.id}')">Kick</button> <button onclick="banMember('${m.id}')">Ban</button></li>`;
+      }
+      html += '</ul>';
+      membersDiv.innerHTML = html;
+    }
+    function kickMember(userId) {
+      const guildId = document.getElementById('guildId').value;
+      ws.send(JSON.stringify({ type: 'kick-member', token, guildId, userId }));
+    }
+    function banMember(userId) {
+      const guildId = document.getElementById('guildId').value;
+      ws.send(JSON.stringify({ type: 'ban-member', token, guildId, userId }));
+    }
+  </script>
+</body>
+</html>
