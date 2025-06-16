@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import sqlite3
 import os
 import re
@@ -9,6 +9,27 @@ class User(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data', 'database.db'))
+        self.update_usernames_displaynames.start()
+
+    @tasks.loop(minutes=30)
+    async def update_usernames_displaynames(self):
+        await self.bot.wait_until_ready()
+        conn = sqlite3.connect(self.db_path)
+        c = conn.cursor()
+        c.execute("SELECT user_id FROM users")
+        user_ids = [row[0] for row in c.fetchall()]
+        for user_id in user_ids:
+            user = self.bot.get_user(user_id)
+            if not user:
+                try:
+                    user = await self.bot.fetch_user(user_id)
+                except Exception:
+                    continue
+            username = user.name
+            display_name = user.display_name if hasattr(user, 'display_name') else user.name
+            c.execute("UPDATE users SET username = ?, display_name = ? WHERE user_id = ?", (username, display_name, user_id))
+        conn.commit()
+        conn.close()
 
     @commands.hybrid_command(aliases=["user"])
     async def profile(self, ctx, user: discord.User = None):
@@ -185,6 +206,14 @@ class User(commands.Cog):
                     print(f"Interaction error in SettingsModal: {error}")
                     await interaction.response.send_message(
                         "An error occurred while processing your input. Please try again later.",
+                        ephemeral=True
+                    )
+                    await interaction.response.send_message(
+                        "If the issue persists, please contact the bot owner.",
+                        ephemeral=True
+                    )
+                    await interaction.message.delete(
+                        "This is likely because you didnt have a database entry, if so, please run highlow then try again.",
                         ephemeral=True
                     )
 

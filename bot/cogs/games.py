@@ -29,7 +29,7 @@ class Games(commands.Cog):
             user_id = ctx.author.id
             conn = sqlite3.connect(db_path)
             c = conn.cursor()
-            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons, username, display_name) VALUES (?, 0, ?, ?)", (user_id, ctx.author.name, ctx.author.display_name))
             c.execute("UPDATE users SET dabloons = dabloons + 1 WHERE user_id = ?", (user_id,))
             conn.commit()
             conn.close()
@@ -226,7 +226,7 @@ class Games(commands.Cog):
         if result:
             conn = sqlite3.connect(db_path)
             c = conn.cursor()
-            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons) VALUES (?, 0)", (user_id,))
+            c.execute("INSERT OR IGNORE INTO users (user_id, dabloons, display_name, username) VALUES (?, 0, ?, ?)", (user_id, ctx.author.display_name, ctx.author.name))
             c.execute("UPDATE users SET dabloons = dabloons + 5 WHERE user_id = ?", (user_id,))
             conn.commit()
             conn.close()

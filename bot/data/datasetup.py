@@ -23,6 +23,8 @@ def setup_database():
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
+            display_name TEXT,
+            username TEXT,
             personal_prefix TEXT,
             bio TEXT,
             profile_picture TEXT,
