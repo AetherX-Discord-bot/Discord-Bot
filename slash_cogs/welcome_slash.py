@@ -1,0 +1,333 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+import json
+import os
+
+class WelcomeCog(commands.Cog):
+    """Welcome and goodbye system with per-guild configuration and separate channels."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+        self.CONFIG_FILE = "welcome_config.json"
+        self.config = self._load_config()
+
+    # -------------------- Configuration loading / saving --------------------
+
+    def _load_config(self) -> dict:
+        """Load the JSON config; create a default empty structure if missing."""
+        default = {}  # guild_id -> settings
+        if os.path.exists(self.CONFIG_FILE):
+            try:
+                with open(self.CONFIG_FILE, "r") as f:
+                    data = json.load(f)
+                # Ensure each guild entry has all keys
+                for guild_id, settings in data.items():
+                    self._ensure_defaults(settings)
+                return data
+            except Exception as e:
+                print(f"❌ Error loading config: {e}")
+                return default
+        else:
+            self._save_config(default)
+            return default
+
+    def _save_config(self, config: dict | None = None):
+        """Save the current config to disk."""
+        if config is None:
+            config = self.config
+        try:
+            with open(self.CONFIG_FILE, "w") as f:
+                json.dump(config, f, indent=4)
+            print(f"✅ Welcome config saved for {len(config)} guilds.")
+        except Exception as e:
+            print(f"❌ Error saving welcome config: {e}")
+
+    @staticmethod
+    def _ensure_defaults(settings: dict):
+        """Fill in any missing keys with default values."""
+        defaults = {
+            "welcome_channel_id": None,
+            "goodbye_channel_id": None,
+            "welcome_message": "Welcome {member.mention} to {guild.name}! 🎉",
+            "goodbye_message": "**{member}** has left the server. 👋",
+            "welcome_enabled": True,
+            "goodbye_enabled": True
+        }
+        for key, val in defaults.items():
+            if key not in settings:
+                settings[key] = val
+
+    def _get_guild_config(self, guild_id: int | None) -> dict:
+        """Retrieve config for a guild, creating default if absent."""
+        if guild_id is None:
+            raise ValueError("Guild ID is required for welcome config.")
+        guild_id_str = str(guild_id)
+        if guild_id_str not in self.config:
+            self.config[guild_id_str] = {
+                "welcome_channel_id": None,
+                "goodbye_channel_id": None,
+                "welcome_message": "Welcome {member.mention} to {guild.name}! 🎉",
+                "goodbye_message": "**{member}** has left the server. 👋",
+                "welcome_enabled": True,
+                "goodbye_enabled": True
+            }
+            self._save_config()
+        return self.config[guild_id_str]
+
+    # -------------------- Event listeners --------------------
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Send welcome message when a member joins."""
+        guild_config = self._get_guild_config(member.guild.id)
+        print(member.guild.id)
+        if not guild_config["welcome_enabled"] or not guild_config["welcome_channel_id"]:
+            return
+
+        channel = self.bot.get_channel(guild_config["welcome_channel_id"])
+        print(channel)
+        if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            return
+
+        try:
+            msg = guild_config["welcome_message"].format(
+                member=member,
+                guild=member.guild,
+                mention=member.mention,
+                name=member.name,
+                display_name=member.display_name
+            )
+            embed = discord.Embed(
+                title="👋 Welcome!",
+                description=msg,
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.set_footer(text=f"Member #{len(member.guild.members)}")
+            await channel.send(embed=embed)
+        except Exception as e:
+            print(f"❌ Error sending welcome: {e}")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        """Send goodbye message when a member leaves."""
+        guild_config = self._get_guild_config(member.guild.id)
+        if not guild_config["goodbye_enabled"] or not guild_config["goodbye_channel_id"]:
+            return
+
+        channel = self.bot.get_channel(guild_config["goodbye_channel_id"])
+        if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            return
+
+        try:
+            msg = guild_config["goodbye_message"].format(
+                member=member,
+                guild=member.guild,
+                mention=member.mention,
+                name=member.name,
+                display_name=member.display_name
+            )
+            embed = discord.Embed(
+                title="👋 Goodbye",
+                description=msg,
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=member.display_avatar.url)
+            await channel.send(embed=embed)
+        except Exception as e:
+            print(f"❌ Error sending goodbye: {e}")
+
+    # -------------------- Slash commands --------------------
+
+    @app_commands.command(name="set_welcome_channel", description="Set the channel for welcome messages.")
+    @app_commands.describe(channel="The text channel to send welcome messages in.")
+    @app_commands.default_permissions(administrator=True)
+    async def set_welcome_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set the welcome channel for this server."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["welcome_channel_id"] = channel.id
+        self._save_config()
+
+        embed = discord.Embed(
+            title="✅ Welcome Channel Set",
+            description=f"Welcome messages will now be sent to {channel.mention}.",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="set_goodbye_channel", description="Set the channel for goodbye messages.")
+    @app_commands.describe(channel="The text channel to send goodbye messages in.")
+    @app_commands.default_permissions(administrator=True)
+    async def set_goodbye_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        """Set the goodbye channel for this server."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["goodbye_channel_id"] = channel.id
+        self._save_config()
+
+        embed = discord.Embed(
+            title="✅ Goodbye Channel Set",
+            description=f"Goodbye messages will now be sent to {channel.mention}.",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="set_welcome_message", description="Set the custom welcome message.")
+    @app_commands.describe(message="The welcome message (use {member.mention}, {guild.name}, etc.)")
+    @app_commands.default_permissions(administrator=True)
+    async def set_welcome_message(self, interaction: discord.Interaction, *, message: str):
+        """Set the welcome message with placeholders."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["welcome_message"] = message
+        self._save_config()
+
+        preview = message.format(
+            member=interaction.user,
+            guild=interaction.guild,
+            mention=interaction.user.mention,
+            name=interaction.user.name,
+            display_name=interaction.user.display_name
+        )
+        embed = discord.Embed(
+            title="✅ Welcome Message Updated",
+            description=f"Preview:\n{preview}",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="set_goodbye_message", description="Set the custom goodbye message.")
+    @app_commands.describe(message="The goodbye message (use {member.mention}, {guild.name}, etc.)")
+    @app_commands.default_permissions(administrator=True)
+    async def set_goodbye_message(self, interaction: discord.Interaction, *, message: str):
+        """Set the goodbye message with placeholders."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["goodbye_message"] = message
+        self._save_config()
+
+        preview = message.format(
+            member=interaction.user,
+            guild=interaction.guild,
+            mention=interaction.user.mention,
+            name=interaction.user.name,
+            display_name=interaction.user.display_name
+        )
+        embed = discord.Embed(
+            title="✅ Goodbye Message Updated",
+            description=f"Preview:\n{preview}",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="toggle_welcome", description="Enable or disable welcome messages.")
+    @app_commands.default_permissions(administrator=True)
+    async def toggle_welcome(self, interaction: discord.Interaction):
+        """Toggle welcome messages on/off."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["welcome_enabled"] = not guild_config["welcome_enabled"]
+        self._save_config()
+        status = "enabled" if guild_config["welcome_enabled"] else "disabled"
+        embed = discord.Embed(
+            title="✅ Welcome Toggled",
+            description=f"Welcome messages are now **{status}**.",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="toggle_goodbye", description="Enable or disable goodbye messages.")
+    @app_commands.default_permissions(administrator=True)
+    async def toggle_goodbye(self, interaction: discord.Interaction):
+        """Toggle goodbye messages on/off."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        guild_config["goodbye_enabled"] = not guild_config["goodbye_enabled"]
+        self._save_config()
+        status = "enabled" if guild_config["goodbye_enabled"] else "disabled"
+        embed = discord.Embed(
+            title="✅ Goodbye Toggled",
+            description=f"Goodbye messages are now **{status}**.",
+            color=discord.Color.green()
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="welcome_settings", description="Show the current welcome/goodbye settings for this server.")
+    @app_commands.default_permissions(administrator=True)
+    async def welcome_settings(self, interaction: discord.Interaction):
+        """Display all settings."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+
+        welcome_ch = interaction.guild.get_channel(guild_config["welcome_channel_id"]) if interaction.guild else None
+        goodbye_ch = interaction.guild.get_channel(guild_config["goodbye_channel_id"]) if interaction.guild else None
+
+        embed = discord.Embed(
+            title="🎉 Welcome System Settings",
+            color=discord.Color.purple()
+        )
+        embed.add_field(
+            name="📥 Welcome Channel",
+            value=welcome_ch.mention if welcome_ch else "Not set",
+            inline=False
+        )
+        embed.add_field(
+            name="📤 Goodbye Channel",
+            value=goodbye_ch.mention if goodbye_ch else "Not set",
+            inline=False
+        )
+        embed.add_field(
+            name="👋 Welcome Messages",
+            value="✅ Enabled" if guild_config["welcome_enabled"] else "❌ Disabled",
+            inline=True
+        )
+        embed.add_field(
+            name="👋 Goodbye Messages",
+            value="✅ Enabled" if guild_config["goodbye_enabled"] else "❌ Disabled",
+            inline=True
+        )
+        embed.add_field(
+            name="📨 Welcome Message",
+            value=f"```{guild_config['welcome_message']}```",
+            inline=False
+        )
+        embed.add_field(
+            name="📤 Goodbye Message",
+            value=f"```{guild_config['goodbye_message']}```",
+            inline=False
+        )
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="test_welcome", description="Send a test welcome message as if you just joined.")
+    @app_commands.default_permissions(administrator=True)
+    async def test_welcome(self, interaction: discord.Interaction):
+        """Test the welcome message by simulating a join."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        if not guild_config["welcome_channel_id"]:
+            await interaction.response.send_message("❌ Welcome channel not set. Use `/set_welcome_channel` first.", ephemeral=True)
+            return
+
+        member = None
+        if interaction.guild is not None:
+            member = interaction.guild.get_member(interaction.user.id)
+        member = member or interaction.user
+        if isinstance(member, discord.Member):
+            await self.on_member_join(member)
+        await interaction.response.send_message("✅ Test welcome message sent!", ephemeral=True)
+
+    @app_commands.command(name="test_goodbye", description="Send a test goodbye message as if you just left.")
+    @app_commands.default_permissions(administrator=True)
+    async def test_goodbye(self, interaction: discord.Interaction):
+        """Test the goodbye message by simulating a leave."""
+        guild_config = self._get_guild_config(interaction.guild_id)
+        if not guild_config["goodbye_channel_id"]:
+            await interaction.response.send_message("❌ Goodbye channel not set. Use `/set_goodbye_channel` first.", ephemeral=True)
+            return
+
+        member = None
+        if interaction.guild is not None:
+            member = interaction.guild.get_member(interaction.user.id)
+        member = member or interaction.user
+        if isinstance(member, discord.Member):
+            await self.on_member_remove(member)
+        await interaction.response.send_message("✅ Test goodbye message sent!", ephemeral=True)
+
+# -------------------- Setup function --------------------
+
+async def setup(bot: commands.Bot):
+    await bot.add_cog(WelcomeCog(bot))
