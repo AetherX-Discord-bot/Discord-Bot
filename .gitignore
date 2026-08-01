@@ -1,6 +1,6 @@
-node_modules/
-dist/
-bot/node_modules/
-# Logs
-logs
-npm-debug.log*
+.env
+config.json
+schedules_messages.db
+welcome_config.json
+__pycache__/
+.vscode/
