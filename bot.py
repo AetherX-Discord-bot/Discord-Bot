@@ -93,7 +93,7 @@ class AetherXBot(commands.Bot):
         #     await animator.print_loading_step("Database failed", "FAILED", "red")
         #     raise
 
-        EXT_FOLDERS = ("slash_cogs", "cogs")
+        EXT_FOLDERS = ("cogs")
         for folder in EXT_FOLDERS:
             if os.path.exists(folder):
                 await animator.print_loading_step(f"Scanning {folder} for extensions...")

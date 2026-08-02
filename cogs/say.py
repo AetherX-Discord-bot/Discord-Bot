@@ -3,16 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 
 class Say(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="say",
-        description="Send a message as the bot in the current channel."
-    )
-    @app_commands.describe(
-        message="The message to send"
-    )
+    @commands.hybrid_command(name="say", description="Send a message as the bot in the current channel.")
     async def say(self, interaction: discord.Interaction, message: str):
         """Make the bot say something"""
         # Check if the user has administrator permissions (ensure user is a Member)
@@ -30,5 +24,5 @@ class Say(commands.Cog):
             # Fallback: send a public followup if channel isn't available.
             await interaction.followup.send(message, ephemeral=False)
 
-async def setup(bot: commands.Bot):
+async def setup(bot):
     await bot.add_cog(Say(bot))

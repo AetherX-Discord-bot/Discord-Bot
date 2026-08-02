@@ -51,8 +51,10 @@ class WelcomeCog(commands.Cog):
                     "join_role_id": row['join_role_id']
                 }
 
-    def _save_guild_config(self, guild_id: int, config: dict):
+    def _save_guild_config(self, guild_id: int | None, config: dict):
         """Insert or replace a guild's configuration in the DB and update the cache."""
+        if guild_id is None:
+            raise ValueError("Guild ID is required.")
         gid_str = str(guild_id)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
@@ -292,10 +294,17 @@ class WelcomeCog(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def welcome_settings(self, interaction: discord.Interaction):
         """Display all settings."""
-        guild_config = self._get_guild_config(interaction.guild_id)
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.", ephemeral=True
+            )
+            return
 
-        welcome_ch = interaction.guild.get_channel(guild_config["welcome_channel_id"])
-        goodbye_ch = interaction.guild.get_channel(guild_config["goodbye_channel_id"])
+        guild_config = self._get_guild_config(guild.id)
+
+        welcome_ch = guild.get_channel(guild_config["welcome_channel_id"])
+        goodbye_ch = guild.get_channel(guild_config["goodbye_channel_id"])
 
         embed = discord.Embed(
             title="🎉 Welcome System Settings",
@@ -343,7 +352,8 @@ class WelcomeCog(commands.Cog):
             return
 
         # Use the command user as the simulated member
-        member = interaction.guild.get_member(interaction.user.id) or interaction.user
+        member = interaction.guild.get_member(interaction.user.id) if interaction.guild else None
+        member = member or interaction.user
         if isinstance(member, discord.Member):
             await self.on_member_join(member)
         await interaction.response.send_message("✅ Test welcome message sent!", ephemeral=True)
@@ -357,7 +367,8 @@ class WelcomeCog(commands.Cog):
             await interaction.response.send_message("❌ Goodbye channel not set. Use `/set_goodbye_channel` first.", ephemeral=True)
             return
 
-        member = interaction.guild.get_member(interaction.user.id) or interaction.user
+        member = interaction.guild.get_member(interaction.user.id) if interaction.guild else None
+        member = member or interaction.user
         if isinstance(member, discord.Member):
             await self.on_member_remove(member)
         await interaction.response.send_message("✅ Test goodbye message sent!", ephemeral=True)
@@ -366,9 +377,14 @@ class WelcomeCog(commands.Cog):
     @app_commands.describe(role="The member role.")
     @app_commands.default_permissions(manage_roles=True)
     async def set_join_role(self, interaction: discord.Interaction, role: discord.Role):
-        guild_config = self._get_guild_config(interaction.guild.id)
+        guild_id = interaction.guild_id
+        if guild_id is None:
+            await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+            return
+
+        guild_config = self._get_guild_config(guild_id)
         guild_config["join_role_id"] = role.id
-        self._save_guild_config(interaction.guild.id, guild_config)
+        self._save_guild_config(guild_id, guild_config)
         await interaction.response.send_message(f"✅ Join set to {role.mention}.", ephemeral=True)
 
 
