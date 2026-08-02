@@ -9,7 +9,7 @@ class PurgeCog(commands.Cog):
     @commands.command(name='purge', aliases=['clear', 'delete'])
     @commands.has_permissions(manage_messages=True)
     @commands.bot_has_permissions(manage_messages=True)
-    async def purge_messages(self, ctx, amount: int, member: Optional[discord.Member] = None):
+    async def purge_messages(self, ctx, amount: str, member: Optional[discord.Member] = None):
         """Delete messages in bulk (optionally from a specific user)
         
         Usage:
@@ -19,36 +19,40 @@ class PurgeCog(commands.Cog):
         """
         try:
             # Handle "all" case
-            if isinstance(amount, str) and amount.lower() == 'all':
+            if amount.lower() == 'all':
                 if not ctx.author.guild_permissions.administrator:
                     await ctx.send("You need administrator permissions to purge all messages.", delete_after=5)
                     return
                 
-                def check(msg):
+                def non_pinned_check(msg):
                     return not msg.pinned
-                
-                deleted = await ctx.channel.purge(limit=None, check=check)
+
+                deleted = await ctx.channel.purge(limit=None, check=non_pinned_check)
                 await ctx.send(f"Deleted {len(deleted)} messages (excluding pinned).", delete_after=5)
                 return
-            
-            # Validate amount
-            if amount <= 0:
+            # Validate amount (should be a number now)
+            try:
+                amt = int(amount)
+            except ValueError:
+                await ctx.send("Please provide a valid number or 'all'.", delete_after=5)
+                return
+
+            if amt <= 0:
                 await ctx.send("Please provide a positive number greater than 0.", delete_after=5)
                 return
-            elif amount > 500:
+            elif amt > 500:
                 await ctx.send("Maximum purge limit is 500 messages at once.", delete_after=5)
                 return
             
             # Add 1 to account for command message
-            limit = amount + 1
+            limit = amt + 1
             
             # Optional member filter
-            def check(msg):
+            def member_check(msg):
                 if member:
                     return msg.author == member
                 return True
-            
-            deleted = await ctx.channel.purge(limit=limit, check=check)
+            deleted = await ctx.channel.purge(limit=limit, check=member_check)
             
             # Send confirmation
             msg = f"Deleted {len(deleted) - 1} messages"

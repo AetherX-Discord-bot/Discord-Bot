@@ -24,12 +24,11 @@ class ServerList(commands.Cog):
         
         try:
             # Try to fetch owner information
-            try:
-                owner = guild.owner or await guild.fetch_member(guild.owner_id)
-                owner_name = str(owner)
-            except:
-                owner_name = f"Unknown (ID: {guild.owner_id})"
-            
+            owner = guild.owner
+            if owner is None and guild.owner_id is not None:
+                owner = await guild.fetch_member(guild.owner_id)
+            owner_name = str(owner) if owner else f"Unknown (ID: {guild.owner_id})"
+
             # Create embed
             embed = discord.Embed(
                 title=f"📊 Server Information: {guild.name}",
@@ -92,13 +91,14 @@ class ServerList(commands.Cog):
         total_pages = (len(servers) + items_per_page - 1) // items_per_page
 
         class ServerPaginator(discord.ui.View):
-            def __init__(self, user_id: int, servers: List[discord.Guild], *, timeout=180):
+            def __init__(self, user_id: int, servers: List[discord.Guild], active_views: dict, *, timeout=180):
                 super().__init__(timeout=timeout)
                 self.current_page = 0
                 self.user_id = user_id
                 self.servers = servers
                 self.items_per_page = items_per_page
                 self.total_pages = total_pages
+                self.active_views = active_views
 
             async def create_embed(self):
                 start = self.current_page * self.items_per_page
@@ -112,7 +112,9 @@ class ServerList(commands.Cog):
 
                 for i, guild in enumerate(current_servers, start=start + 1):
                     try:
-                        owner = guild.owner or await guild.fetch_member(guild.owner_id)
+                        owner = guild.owner
+                        if owner is None and guild.owner_id is not None:
+                            owner = await guild.fetch_member(guild.owner_id)
                         owner_display = f"{owner}" if owner else f"Unknown (ID: {guild.owner_id})"
                     except:
                         owner_display = f"Unknown (ID: {guild.owner_id})"
@@ -127,7 +129,7 @@ class ServerList(commands.Cog):
                         inline=False
                     )
 
-                embed.set_footer(text=f"Total Members Across All Servers: {sum(g.member_count for g in self.servers)}")
+                embed.set_footer(text=f"Total Members Across All Servers: {sum(g.member_count for g in self.servers if g.member_count)}")
                 return embed
 
             async def update_buttons(self):
@@ -168,10 +170,10 @@ class ServerList(commands.Cog):
                 if interaction.user.id != self.user_id:
                     return await interaction.response.send_message("This isn't your menu!", ephemeral=True)
 
-                await interaction.message.delete()
+                if interaction.message:
+                    await interaction.message.delete()
                 self.stop()
-                if self.user_id in self.active_views:
-                    self.active_views.pop(self.user_id)
+                self.active_views.pop(self.user_id, None)
 
             async def on_timeout(self):
                 if self.user_id in self.active_views:
@@ -181,12 +183,12 @@ class ServerList(commands.Cog):
                 return interaction.user.id == self.user_id
 
         # Initialize view
-        view = ServerPaginator(ctx.author.id, servers)
+        view = ServerPaginator(ctx.author.id, servers, self.active_views)
         await view.update_buttons()
         message = await ctx.send(embed=await view.create_embed(), view=view)
         self.active_views[ctx.author.id] = view
 
-    def cog_unload(self):
+    async def cog_unload(self):
         """Clean up on cog unload"""
         for view in self.active_views.values():
             view.stop()
