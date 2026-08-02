@@ -18,7 +18,7 @@ class ScheduleCog(commands.Cog):
 
     async def init_db(self):
         """Initialize database table for scheduled messages"""
-        async with aiosqlite.connect('scheduled_messages.db') as db:
+        async with aiosqlite.connect('AetherX.db') as db:
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS scheduled_messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
