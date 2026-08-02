@@ -92,6 +92,28 @@ class WelcomeCog(commands.Cog):
             self._save_guild_config(guild_id, default)
         return self.config_cache[gid_str]
 
+
+    async def _assign_join_role(self, member: discord.Member, guild_config: dict):
+        """Assign a default role to the member if configured."""
+        # Get the role ID from your config (you'll need to store it in the DB)
+        role_id = guild_config.get("join_role_id")
+        if not role_id:
+            return  # no role configured, just skip
+    
+        role = member.guild.get_role(role_id)
+        if role is None:
+            print(f"⚠️ Role with ID {role_id} not found in {member.guild.name}")
+            return
+    
+        try:
+            await member.add_roles(role, reason="Auto-role on join")
+            print(f"✅ Assigned {role.name} to {member.name}")
+        except discord.Forbidden:
+            print(f"❌ Missing permissions to assign role in {member.guild.name}")
+        except discord.HTTPException as e:
+            print(f"❌ Failed to assign role: {e}")
+    
+
     # -------------------- Event listeners --------------------
 
     @commands.Cog.listener()
