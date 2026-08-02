@@ -121,7 +121,7 @@ class WelcomeCog(commands.Cog):
             embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_footer(text=f"Member #{len(member.guild.members)}")
             await channel.send(embed=embed)
-            
+            await self._assign_join_role(member, guild_config)
         except Exception as e:
             print(f"❌ Error sending welcome: {e}")
 
