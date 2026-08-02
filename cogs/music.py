@@ -9,13 +9,11 @@ import shutil
 from collections import defaultdict
 from typing import Any, Dict
 
-# Create downloads folder if it doesn't exist
 DOWNLOAD_FOLDER = "downloads"
 if not os.path.exists(DOWNLOAD_FOLDER):
     os.makedirs(DOWNLOAD_FOLDER)
     print(f"✅ Created downloads folder: {DOWNLOAD_FOLDER}")
 
-# Function to clean up old files in downloads folder
 def cleanup_downloads_folder(max_age_hours=24):
     """Remove files older than specified hours from downloads folder"""
     try:
@@ -26,7 +24,7 @@ def cleanup_downloads_folder(max_age_hours=24):
             filepath = os.path.join(DOWNLOAD_FOLDER, filename)
             if os.path.isfile(filepath):
                 file_age = current_time - os.path.getmtime(filepath)
-                if file_age > (max_age_hours * 3600):  # Convert hours to seconds
+                if file_age > (max_age_hours * 3600):
                     os.remove(filepath)
                     removed_count += 1
                     print(f"🧹 Cleaned up old file: {filename}")
@@ -37,23 +35,19 @@ def cleanup_downloads_folder(max_age_hours=24):
     except Exception as e:
         print(f"❌ Error cleaning downloads folder: {e}")
 
-# Run initial cleanup
 cleanup_downloads_folder()
 
-# Rate limiting tracking
 class RateLimiter:
     def __init__(self):
         self.requests = defaultdict(list)
-        self.max_requests = 50  # Conservative limit per 10 minutes
-        self.time_window = 600  # 10 minutes in seconds
+        self.max_requests = 50
+        self.time_window = 600
         
     def can_make_request(self, identifier="global"):
         now = time.time()
-        # Remove old requests outside the time window
         self.requests[identifier] = [req_time for req_time in self.requests[identifier] 
                                    if now - req_time < self.time_window]
         
-        # Check if under limit
         return len(self.requests[identifier]) < self.max_requests
         
     def add_request(self, identifier="global"):
@@ -62,7 +56,6 @@ class RateLimiter:
 
 rate_limiter = RateLimiter()
 
-# Check for cookies file
 def setup_cookies():
     """
     Check for cookies file and detect what platforms it contains cookies for.
@@ -71,7 +64,6 @@ def setup_cookies():
     cookie_files = ['cookies.txt', 'cookies.json']
     for cookie_file in cookie_files:
         if os.path.exists(cookie_file):
-            # Detect which platforms have cookies
             with open(cookie_file, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read().lower()
                 platforms = []
@@ -92,37 +84,32 @@ def setup_cookies():
 
 cookie_file = setup_cookies()
 
-# Configuration - ENABLE PLAYLISTS and convert to MP3
 ytdl_format_options = {
     'format': 'bestaudio/best',
-    'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),  # Updated to use downloads folder
+    'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
     'restrictfilenames': True,
-    'noplaylist': False,  # ENABLE playlists
+    'noplaylist': False,
     'nocheckcertificate': True,
     'ignoreerrors': True,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'extract_flat': 'in_playlist',  # Extract flat only for playlist entries to avoid URL expiration
+    'extract_flat': 'in_playlist',
     
-    # Caching options
     'cachedir': './yt_dlp_cache',
     'cookiefile': cookie_file if cookie_file else None,
     
-    # Audio conversion - convert to MP3 for smaller file size and faster loading
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
     
-    # Audio format settings
     'extractaudio': True,
     'audioformat': 'mp3',
-    'keepvideo': False,  # Don't keep original video after conversion
+    'keepvideo': False,
     
-    # Throttling
     'sleep_interval': 1,
     'max_sleep_interval': 2,
     'retries': 3,
@@ -137,9 +124,8 @@ ffmpeg_options: Dict[str, Any] = {
 
 ytdl: yt_dlp.YoutubeDL = yt_dlp.YoutubeDL(ytdl_format_options)  # type: ignore
 
-# Cache for recently played tracks
 audio_cache = {}
-CACHE_DURATION = 3600  # 1 hour cache
+CACHE_DURATION = 3600
 
 class MusicPlayer:
     def __init__(self, ctx):
@@ -155,9 +141,9 @@ class MusicPlayer:
         self._is_playing = False
         self._last_request_time = 0
         self._request_delay = 2
-        self._playlist_tracks = []  # Store playlist tracks
-        self._current_playlist = None  # Current playlist being processed
-        self._downloaded_files = []  # Track downloaded files for cleanup
+        self._playlist_tracks = []
+        self._current_playlist = None
+        self._downloaded_files = []
         self.start_time = None
         self.duration = 0
         self.paused = False
@@ -165,13 +151,11 @@ class MusicPlayer:
 
     async def safe_extract_info(self, url, platform, download=False):
         """Safely extract info with rate limiting and delays"""
-        # Check rate limits
         if not rate_limiter.can_make_request(platform):
             wait_time = random.randint(30, 60)
             print(f"⚠️ Rate limit approached for {platform}. Waiting {wait_time}s")
             await asyncio.sleep(wait_time)
         
-        # Check cache first
         cache_key = f"{platform}:{url}:{download}"
         if cache_key in audio_cache:
             cache_time, cached_data = audio_cache[cache_key]
@@ -179,27 +163,20 @@ class MusicPlayer:
                 print(f"✅ Using cached data for {url}")
                 return cached_data
         
-        # Enforce minimum delay between requests
         time_since_last = time.time() - self._last_request_time
         if time_since_last < self._request_delay:
             await asyncio.sleep(self._request_delay - time_since_last)
         
-        # Add jitter to avoid synchronized requests
         await asyncio.sleep(random.uniform(0.5, 1.5))
         
         try:
             rate_limiter.add_request(platform)
             self._last_request_time = time.time()
             
-            # Create a temporary ytdl instance with appropriate settings
             temp_options = ytdl_format_options.copy()
             
-            # For playlist extraction, use extract_flat for discovery
-            # For actual playback, get full info immediately (don't extract flat)
             if download:
-                # When downloading/preparing for playback, don't use extract_flat
                 temp_options['extract_flat'] = False
-            # else keep the default 'in_playlist' setting
             
             temp_ytdl = yt_dlp.YoutubeDL(temp_options)  # type: ignore
             
@@ -208,11 +185,9 @@ class MusicPlayer:
                 lambda: temp_ytdl.extract_info(url, download=download)
             )
             
-            # If we downloaded a file, track it
             if download and data and '_filename' in data:
                 downloaded_file = data.get('_filename')
                 if downloaded_file and os.path.exists(downloaded_file):
-                    # Move to downloads folder if not already there (for consistency)
                     if DOWNLOAD_FOLDER not in downloaded_file:
                         filename = os.path.basename(downloaded_file)
                         new_path = os.path.join(DOWNLOAD_FOLDER, filename)
@@ -223,7 +198,6 @@ class MusicPlayer:
                     self._downloaded_files.append(downloaded_file)
                     print(f"💾 Downloaded file saved to: {downloaded_file}")
             
-            # Cache successful results
             if data:
                 audio_cache[cache_key] = (time.time(), data)
                 
@@ -254,28 +228,23 @@ class MusicPlayer:
                 print(f"❌ No URL found for track: {track_info.get('title', 'Unknown')}")
                 return None
             
-            # Extract full audio info for this specific track
             print(f"🔍 Extracting full track info for: {track_info.get('title', 'Unknown')}")
             full_data = await self.safe_extract_info(
                 track_url, 
                 platform, 
-                download=True  # Download the audio file for reliable playback
+                download=True
             )
             
             if not full_data:
                 print(f"❌ Failed to extract info for: {track_info.get('title', 'Unknown')}")
                 return None
             
-            # Get the audio URL or downloaded file path
-            # If a file was downloaded, use the file path
             audio_url = None
             if '_filename' in full_data and os.path.exists(full_data['_filename']):
-                # Use downloaded file
                 audio_url = full_data['_filename']
                 self._downloaded_files.append(audio_url)
                 print(f"✅ Using downloaded file for playback: {audio_url}")
             else:
-                # Fallback to URL (for streaming sources)
                 audio_url = full_data.get('url')
                 if not audio_url and 'entries' in full_data and len(full_data['entries']) > 0:
                     audio_url = full_data['entries'][0].get('url')
@@ -284,13 +253,12 @@ class MusicPlayer:
                 print(f"❌ Could not extract audio URL for: {track_info.get('title', 'Unknown')}")
                 return None
             
-            # Get title from full_data if not in track_info
             title = track_info.get('title') or full_data.get('title', 'Unknown Title')
             
             return {
                 'title': title,
-                'url': audio_url,  # Use downloaded file path or audio stream URL
-                'webpage_url': track_url,  # Keep original URL for reference
+                'url': audio_url,
+                'webpage_url': track_url,
                 'requester': self.ctx.author,
                 'platform': platform,
                 'is_playlist_track': True,
@@ -321,7 +289,6 @@ class MusicPlayer:
                 self.cleanup()
                 return
 
-            # Check if we need to load the next playlist track
             if self._playlist_tracks and not self.queue:
                 embed = discord.Embed(title="🔄 Loading Next Track", color=discord.Color.blue())
                 embed.description = "Processing next song from playlist..."
@@ -333,7 +300,6 @@ class MusicPlayer:
                 if loaded_track:
                     self.queue.append(loaded_track)
                     
-                    # Update current playlist info
                     remaining_tracks = len(self._playlist_tracks)
                     if remaining_tracks > 0:
                         embed = discord.Embed(title="📋 Playlist Progress", color=discord.Color.blue())
@@ -344,12 +310,10 @@ class MusicPlayer:
                     embed.description = f"Could not load: {next_track_info.get('title', 'Unknown')}"
                     await self.ctx.send(embed=embed)
                     
-                    # Continue with next track if available
                     if self._playlist_tracks:
                         await self.play_next()
 
             if not self.queue:
-                # Clear playlist if queue is empty
                 if self._playlist_tracks:
                     self._playlist_tracks.clear()
                     self._current_playlist = None
@@ -418,10 +382,8 @@ class MusicPlayer:
         return icons.get(extractor.lower(), '🎶')
 
     def cleanup(self):
-        # Clean up downloaded files
         self.cleanup_downloaded_files()
         
-        # Clear playlist data
         self._playlist_tracks.clear()
         self._current_playlist = None
         
@@ -433,7 +395,7 @@ class Music(commands.Cog):
         self.bot = bot
         self.players = {}
         self.last_cleanup_time = time.time()
-        self.cleanup_interval = 3600  # Clean up every hour
+        self.cleanup_interval = 3600
 
     def get_player(self, ctx):
         if ctx.guild.id not in self.players:
@@ -484,7 +446,6 @@ class Music(commands.Cog):
 
         player = self.get_player(ctx)
         
-        # Determine URL - FIX: Always use search prefix for non-URL queries
         if self.is_valid_url(query):
             url = query
         else:
@@ -502,7 +463,6 @@ class Music(commands.Cog):
 
         player = self.get_player(ctx)
         
-        # Run periodic cleanup
         await self.periodic_cleanup()
         
         async with ctx.typing():
@@ -523,7 +483,6 @@ class Music(commands.Cog):
                         await ctx.send(embed=embed)
                         return
 
-                # Handle playlists
                 if 'entries' in data and len(data['entries']) > 1:
                     playlist_tracks = []
                     valid_entries = [entry for entry in data['entries'] if entry is not None]
@@ -534,18 +493,15 @@ class Music(commands.Cog):
                         await ctx.send(embed=embed)
                         return
 
-                    # Store playlist info
                     playlist_title = data.get('title', 'Unknown Playlist')
                     total_tracks = len(valid_entries)
                     
-                    # Only load the first track immediately, queue the rest as track info
                     first_track_info = valid_entries[0]
                     loaded_first_track = await player.load_playlist_track(first_track_info)
                     
                     if loaded_first_track:
                         player.queue.append(loaded_first_track)
                     
-                    # Store remaining tracks as info only (will be loaded one by one)
                     player._playlist_tracks = valid_entries[1:]
                     player._current_playlist = playlist_title
                     
@@ -561,10 +517,8 @@ class Music(commands.Cog):
                     await ctx.send(embed=embed)
                     
                 else:
-                    # Single track - FIX: Handle search results properly
                     track_data = data
                     if 'entries' in data:
-                        # This is a search result with entries
                         entries = data['entries']
                         if entries and len(entries) > 0:
                             track_data = entries[0]
@@ -572,12 +526,10 @@ class Music(commands.Cog):
                             await ctx.send("❌ No results found for your search!")
                             return
 
-                    # Validate we have the required data
                     if not track_data or not isinstance(track_data, dict):
                         await ctx.send("❌ Invalid data received from search.")
                         return
 
-                    # Get the track title safely
                     track_title = track_data.get('title', 'Unknown Title')
                     track_url = track_data.get('url', '')
                     
@@ -585,7 +537,6 @@ class Music(commands.Cog):
                         await ctx.send("❌ Could not get audio URL for this track.")
                         return
 
-                    # For single tracks, load full audio immediately
                     full_data = await player.safe_extract_info(
                         track_url, 
                         'soundcloud' if is_soundcloud else 'youtube', 
@@ -611,7 +562,6 @@ class Music(commands.Cog):
                     embed.add_field(name="Requested by", value=ctx.author.mention, inline=False)
                     await ctx.send(embed=embed)
 
-                # Start playing if not already
                 if not ctx.voice_client.is_playing() and not player._is_playing:
                     await player.play_next()
                 
@@ -626,7 +576,6 @@ class Music(commands.Cog):
 
         player = self.get_player(ctx)
         
-        # Run periodic cleanup
         await self.periodic_cleanup()
         
         async with ctx.typing():
@@ -644,7 +593,6 @@ class Music(commands.Cog):
                     await ctx.send("❌ Couldn't find that SoundCloud track or rate limit reached.")
                     return
 
-                # Handle SoundCloud playlists
                 if 'entries' in data and len(data['entries']) > 1:
                     playlist_tracks = []
                     valid_entries = [entry for entry in data['entries'] if entry is not None]
@@ -673,7 +621,6 @@ class Music(commands.Cog):
                     await ctx.send(message)
                     
                 else:
-                    # Single SoundCloud track - FIX: Handle search results properly
                     track_data = data
                     if 'entries' in data:
                         entries = data['entries']
@@ -738,7 +685,6 @@ class Music(commands.Cog):
             await ctx.send(embed=embed)
             return
 
-        # Admin override
         if ctx.author.id in player.admin_ids:
             embed = discord.Embed(title="⏭️ Admin Skip", color=discord.Color.green())
             embed.description = f"Admin {ctx.author.mention} forced skip!"
@@ -746,7 +692,6 @@ class Music(commands.Cog):
             ctx.voice_client.stop()
             return
 
-        # Vote system
         voters = [m for m in ctx.voice_client.channel.members if not m.bot]
         required_votes = (len(voters) // 2 + 1)
         
@@ -782,7 +727,6 @@ class Music(commands.Cog):
 
         embed = discord.Embed(title="🎧 Queue", color=discord.Color.blue())
         
-        # Show currently playing
         if player.current:
             platform_icon = player.get_platform_icon(player.current.get('platform', ''))
             embed.add_field(
@@ -791,7 +735,6 @@ class Music(commands.Cog):
                 inline=False
             )
         
-        # Show upcoming in queue
         if player.queue:
             queue_list = "\n".join(
                 f"{i+1}. {track['title']}"
@@ -803,7 +746,6 @@ class Music(commands.Cog):
                 inline=False
             )
         
-        # Show playlist info if active
         if player._playlist_tracks:
             embed.add_field(
                 name=f"📋 {player._current_playlist}",
@@ -833,7 +775,6 @@ class Music(commands.Cog):
         if player.current.get('is_playlist_track'):
             embed.add_field(name="Source", value="Playlist", inline=True)
         
-        # Add progress if available
         if player.start_time:
             if player.paused and player.pause_start:
                 elapsed = int(player.pause_start - player.start_time)
@@ -931,7 +872,6 @@ class Music(commands.Cog):
         player = self.get_player(ctx)
         
         if ctx.voice_client:
-            # Clear queue and stop playback
             player.queue.clear()
             player._playlist_tracks.clear()
             player._current_playlist = None
@@ -965,7 +905,6 @@ class Music(commands.Cog):
 - Use `$fixsoundcloud` command for setup instructions
 
 **Examples:**
--# This depends on the bots prefix for your server (default is !)
 `play never gonna give you up` - Search YouTube
 `play https://soundcloud.com/...` - Play SoundCloud URL
 `soundcloud chill lofi` - Search SoundCloud specifically
@@ -1046,7 +985,6 @@ class Music(commands.Cog):
         soundcloud_remaining = rate_limiter.max_requests - soundcloud_requests
         youtube_remaining = rate_limiter.max_requests - youtube_requests
         
-        # Calculate reset time
         all_requests = rate_limiter.requests['soundcloud'] + rate_limiter.requests['youtube']
         if all_requests:
             oldest_request = min(all_requests)
@@ -1130,7 +1068,6 @@ class Music(commands.Cog):
             file_count = len(files)
             total_size = sum(os.path.getsize(os.path.join(DOWNLOAD_FOLDER, f)) for f in files)
             
-            # Get oldest and newest files
             if files:
                 file_times = [(f, os.path.getmtime(os.path.join(DOWNLOAD_FOLDER, f))) for f in files]
                 oldest = min(file_times, key=lambda x: x[1])
@@ -1163,14 +1100,11 @@ Use `$cleanupdownloads` to manually clean up now.
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        # Auto-disconnect if bot is alone
         if member == self.bot.user and not after.channel:
             guild_id = before.channel.guild.id
             if guild_id in self.players:
-                # Clean up downloaded files for this player
                 self.players[guild_id].cleanup_downloaded_files()
                 
-                # Clear playlist data
                 self.players[guild_id]._playlist_tracks.clear()
                 self.players[guild_id]._current_playlist = None
                 del self.players[guild_id]
