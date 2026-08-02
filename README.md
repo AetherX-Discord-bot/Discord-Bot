@@ -5,5 +5,15 @@
 
 > **Note:** We are currently rebuilding the bot from the ground up to provide a simple and clean user experience! Updates will be slow.
 
+# Running the bot
+
+```
+git clone https://github.com/AetherX-Discord-bot/Discord-Bot AetherX
+cd AetherX
+pip install -r requirements.txt
+echo "TOKEN=YOUR_DISCORD_BOT_TOKEN" > .env
+python bot.py
+```
+
 ## Bot Code Information
 ![Analytics](https://repobeats.axiom.co/api/embed/30ea3e4e18bb961e59d4b35e9aee27d17e5505d5.svg "Repobeats analytics image")
