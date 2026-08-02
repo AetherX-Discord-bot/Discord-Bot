@@ -13,7 +13,7 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 database = sqlite3.connect("AetherX.db")
 cursor = database.cursor()
-cursor.excecute("CREATE TABLE IF NOT EXISTS")
+
 if not TOKEN:
     raise RuntimeError("TOKEN environment variable is not set")
 
