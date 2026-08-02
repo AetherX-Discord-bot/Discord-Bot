@@ -107,7 +107,7 @@ class ScheduleCog(commands.Cog):
                     await ctx.send("❌ Please select a future date and time.")
                 return
 
-            async with aiosqlite.connect('scheduled_messages.db') as db:
+            async with aiosqlite.connect('AetherX.db') as db:
                 await db.execute('''
                     INSERT INTO scheduled_messages 
                     (guild_id, channel_id, message, scheduled_time, timezone, ping_role_id, author_id)
@@ -169,7 +169,7 @@ class ScheduleCog(commands.Cog):
         try:
             now = discord.utils.utcnow()
             
-            async with aiosqlite.connect('scheduled_messages.db') as db:
+            async with aiosqlite.connect('AetherX.db') as db:
                 async with db.execute(
                     'SELECT * FROM scheduled_messages WHERE scheduled_time <= ?',
                     (now.isoformat(),)
@@ -206,7 +206,7 @@ class ScheduleCog(commands.Cog):
     )
     async def list_scheduled(self, interaction: discord.Interaction):
         """List scheduled messages for this server"""
-        async with aiosqlite.connect('scheduled_messages.db') as db:
+        async with aiosqlite.connect('AetherX.db') as db:
             async with db.execute(
                 'SELECT * FROM scheduled_messages WHERE guild_id = ? ORDER BY scheduled_time',
                 (interaction.guild_id,)
@@ -243,7 +243,7 @@ class ScheduleCog(commands.Cog):
     @app_commands.describe(message_id="The ID of the message to cancel")
     async def cancel_scheduled(self, interaction: discord.Interaction, message_id: int):
         """Cancel a scheduled message"""
-        async with aiosqlite.connect('scheduled_messages.db') as db:
+        async with aiosqlite.connect('AetherX.db') as db:
             async with db.execute(
                 'SELECT * FROM scheduled_messages WHERE id = ? AND guild_id = ?',
                 (message_id, interaction.guild_id)
