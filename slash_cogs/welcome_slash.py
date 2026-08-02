@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 from typing import Dict, Any
 
+
 class WelcomeCog(commands.Cog):
     """Welcome and goodbye system with per-guild configuration using SQLite."""
 
