@@ -28,7 +28,8 @@ class WelcomeCog(commands.Cog):
                     welcome_message TEXT,
                     goodbye_message TEXT,
                     welcome_enabled INTEGER DEFAULT 1,
-                    goodbye_enabled INTEGER DEFAULT 1
+                    goodbye_enabled INTEGER DEFAULT 1,
+                    join_role_id INTEGER
                 )
             ''')
             conn.commit()
@@ -46,7 +47,8 @@ class WelcomeCog(commands.Cog):
                     "welcome_message": row['welcome_message'] or "Welcome {member.mention} to {guild.name}! 🎉",
                     "goodbye_message": row['goodbye_message'] or "**{member}** has left the server. 👋",
                     "welcome_enabled": bool(row['welcome_enabled']),
-                    "goodbye_enabled": bool(row['goodbye_enabled'])
+                    "goodbye_enabled": bool(row['goodbye_enabled']),
+                    "join_role_id": row['join_role_id']
                 }
 
     def _save_guild_config(self, guild_id: int, config: dict):
@@ -56,8 +58,8 @@ class WelcomeCog(commands.Cog):
             conn.execute('''
                 INSERT OR REPLACE INTO guild_config (
                     guild_id, welcome_channel_id, goodbye_channel_id,
-                    welcome_message, goodbye_message, welcome_enabled, goodbye_enabled
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    welcome_message, goodbye_message, welcome_enabled, goodbye_enabled, join_role_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 guild_id,
                 config.get("welcome_channel_id"),
@@ -65,7 +67,8 @@ class WelcomeCog(commands.Cog):
                 config.get("welcome_message"),
                 config.get("goodbye_message"),
                 1 if config.get("welcome_enabled", True) else 0,
-                1 if config.get("goodbye_enabled", True) else 0
+                1 if config.get("goodbye_enabled", True) else 0,
+                config.get("join_role_id")
             ))
             conn.commit()
         # Update cache
@@ -83,7 +86,8 @@ class WelcomeCog(commands.Cog):
                 "welcome_message": "Welcome {member.mention} to {guild.name}! 🎉",
                 "goodbye_message": "**{member}** has left the server. 👋",
                 "welcome_enabled": True,
-                "goodbye_enabled": True
+                "goodbye_enabled": True,
+                "join_role_id": None
             }
             self._save_guild_config(guild_id, default)
         return self.config_cache[gid_str]
@@ -117,6 +121,7 @@ class WelcomeCog(commands.Cog):
             embed.set_thumbnail(url=member.display_avatar.url)
             embed.set_footer(text=f"Member #{len(member.guild.members)}")
             await channel.send(embed=embed)
+            
         except Exception as e:
             print(f"❌ Error sending welcome: {e}")
 
@@ -334,6 +339,16 @@ class WelcomeCog(commands.Cog):
         if isinstance(member, discord.Member):
             await self.on_member_remove(member)
         await interaction.response.send_message("✅ Test goodbye message sent!", ephemeral=True)
+
+    @app_commands.command(name="set_join_role", description="Set your servers main members role!")
+    @app_commands.describe(role="The member role.")
+    @app_commands.default_permissions(manage_roles=True)
+    async def set_join_role(self, interaction: discord.Interaction, role: discord.Role):
+        guild_config = self._get_guild_config(interaction.guild.id)
+        guild_config["join_role_id"] = role.id
+        self._save_guild_config(interaction.guild.id, guild_config)
+        await interaction.response.send_message(f"✅ Join set to {role.mention}.", ephemeral=True)
+
 
 
 # -------------------- Setup function for the cog --------------------
