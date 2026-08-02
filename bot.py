@@ -27,9 +27,9 @@ def print_boot_banner():
      \____|__  /\___  >__| |___|  /\___  >__| /___/\  \
              \/     \/          \/     \/           \_/
     """
-    print("\033[96m" + banner + "\033[0m")  # Cyan color
+    print("\033[96m" + banner + "\033[0m")
     print("\033[92m[INFO]\033[0m Initializing AetherX...\n")
-    print("\033[94m" + "=" * 50 + "\033[0m")  # Separator line
+    print("\033[94m" + "=" * 50 + "\033[0m")
 
 
 intents = discord.Intents.default()
@@ -119,7 +119,7 @@ bot = AetherXBot(command_prefix="$", intents=intents)
 @bot.event
 async def on_ready():
     animator = BootAnimator()
-    await bot.change_presence(activity=discord.Game(name="Rebranding soon. . ."))
+    await bot.change_presence(activity=discord.Game(name="Version 0.2.0 Alpha out now | $help"))
     
     steps = [
         ("Syncing slash commands...", bot.tree.sync()),
