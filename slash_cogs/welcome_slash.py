@@ -1,70 +1,82 @@
 import discord
+import sqlite3
 from discord import app_commands
 from discord.ext import commands
-import json
-import os
+from typing import Dict, Any
 
 class WelcomeCog(commands.Cog):
-    """Welcome and goodbye system with per-guild configuration and separate channels."""
+    """Welcome and goodbye system with per-guild configuration using SQLite."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.CONFIG_FILE = "welcome_config.json"
-        self.config = self._load_config()
+        self.db_path = "AetherX.db"               # Your database file
+        self.config_cache: Dict[str, dict] = {}   # guild_id_str -> settings
+        self._init_db()
+        self._load_all_configs()
 
-    # -------------------- Configuration loading / saving --------------------
+    # -------------------- Database setup and helpers --------------------
 
-    def _load_config(self) -> dict:
-        """Load the JSON config; create a default empty structure if missing."""
-        default = {}  # guild_id -> settings
-        if os.path.exists(self.CONFIG_FILE):
-            try:
-                with open(self.CONFIG_FILE, "r") as f:
-                    data = json.load(f)
-                # Ensure each guild entry has all keys
-                for guild_id, settings in data.items():
-                    self._ensure_defaults(settings)
-                return data
-            except Exception as e:
-                print(f"❌ Error loading config: {e}")
-                return default
-        else:
-            self._save_config(default)
-            return default
+    def _init_db(self):
+        """Create the guild_config table if it doesn't exist."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS guild_config (
+                    guild_id INTEGER PRIMARY KEY,
+                    welcome_channel_id INTEGER,
+                    goodbye_channel_id INTEGER,
+                    welcome_message TEXT,
+                    goodbye_message TEXT,
+                    welcome_enabled INTEGER DEFAULT 1,
+                    goodbye_enabled INTEGER DEFAULT 1
+                )
+            ''')
+            conn.commit()
 
-    def _save_config(self, config: dict | None = None):
-        """Save the current config to disk."""
-        if config is None:
-            config = self.config
-        try:
-            with open(self.CONFIG_FILE, "w") as f:
-                json.dump(config, f, indent=4)
-            print(f"✅ Welcome config saved for {len(config)} guilds.")
-        except Exception as e:
-            print(f"❌ Error saving welcome config: {e}")
+    def _load_all_configs(self):
+        """Load all guild configurations from the database into the cache."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute('SELECT * FROM guild_config')
+            for row in cursor.fetchall():
+                gid = str(row['guild_id'])
+                self.config_cache[gid] = {
+                    "welcome_channel_id": row['welcome_channel_id'],
+                    "goodbye_channel_id": row['goodbye_channel_id'],
+                    "welcome_message": row['welcome_message'] or "Welcome {member.mention} to {guild.name}! 🎉",
+                    "goodbye_message": row['goodbye_message'] or "**{member}** has left the server. 👋",
+                    "welcome_enabled": bool(row['welcome_enabled']),
+                    "goodbye_enabled": bool(row['goodbye_enabled'])
+                }
 
-    @staticmethod
-    def _ensure_defaults(settings: dict):
-        """Fill in any missing keys with default values."""
-        defaults = {
-            "welcome_channel_id": None,
-            "goodbye_channel_id": None,
-            "welcome_message": "Welcome {member.mention} to {guild.name}! 🎉",
-            "goodbye_message": "**{member}** has left the server. 👋",
-            "welcome_enabled": True,
-            "goodbye_enabled": True
-        }
-        for key, val in defaults.items():
-            if key not in settings:
-                settings[key] = val
+    def _save_guild_config(self, guild_id: int, config: dict):
+        """Insert or replace a guild's configuration in the DB and update the cache."""
+        gid_str = str(guild_id)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT OR REPLACE INTO guild_config (
+                    guild_id, welcome_channel_id, goodbye_channel_id,
+                    welcome_message, goodbye_message, welcome_enabled, goodbye_enabled
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                guild_id,
+                config.get("welcome_channel_id"),
+                config.get("goodbye_channel_id"),
+                config.get("welcome_message"),
+                config.get("goodbye_message"),
+                1 if config.get("welcome_enabled", True) else 0,
+                1 if config.get("goodbye_enabled", True) else 0
+            ))
+            conn.commit()
+        # Update cache
+        self.config_cache[gid_str] = config
 
     def _get_guild_config(self, guild_id: int | None) -> dict:
-        """Retrieve config for a guild, creating default if absent."""
+        """Retrieve config for a guild; create default if absent."""
         if guild_id is None:
-            raise ValueError("Guild ID is required for welcome config.")
-        guild_id_str = str(guild_id)
-        if guild_id_str not in self.config:
-            self.config[guild_id_str] = {
+            raise ValueError("Guild ID is required.")
+        gid_str = str(guild_id)
+        if gid_str not in self.config_cache:
+            default = {
                 "welcome_channel_id": None,
                 "goodbye_channel_id": None,
                 "welcome_message": "Welcome {member.mention} to {guild.name}! 🎉",
@@ -72,8 +84,8 @@ class WelcomeCog(commands.Cog):
                 "welcome_enabled": True,
                 "goodbye_enabled": True
             }
-            self._save_config()
-        return self.config[guild_id_str]
+            self._save_guild_config(guild_id, default)
+        return self.config_cache[gid_str]
 
     # -------------------- Event listeners --------------------
 
@@ -81,12 +93,10 @@ class WelcomeCog(commands.Cog):
     async def on_member_join(self, member: discord.Member):
         """Send welcome message when a member joins."""
         guild_config = self._get_guild_config(member.guild.id)
-        print(member.guild.id)
         if not guild_config["welcome_enabled"] or not guild_config["welcome_channel_id"]:
             return
 
         channel = self.bot.get_channel(guild_config["welcome_channel_id"])
-        print(channel)
         if not channel or not isinstance(channel, (discord.TextChannel, discord.Thread)):
             return
 
@@ -147,7 +157,7 @@ class WelcomeCog(commands.Cog):
         """Set the welcome channel for this server."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["welcome_channel_id"] = channel.id
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
 
         embed = discord.Embed(
             title="✅ Welcome Channel Set",
@@ -163,7 +173,7 @@ class WelcomeCog(commands.Cog):
         """Set the goodbye channel for this server."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["goodbye_channel_id"] = channel.id
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
 
         embed = discord.Embed(
             title="✅ Goodbye Channel Set",
@@ -179,7 +189,7 @@ class WelcomeCog(commands.Cog):
         """Set the welcome message with placeholders."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["welcome_message"] = message
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
 
         preview = message.format(
             member=interaction.user,
@@ -202,7 +212,7 @@ class WelcomeCog(commands.Cog):
         """Set the goodbye message with placeholders."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["goodbye_message"] = message
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
 
         preview = message.format(
             member=interaction.user,
@@ -224,7 +234,8 @@ class WelcomeCog(commands.Cog):
         """Toggle welcome messages on/off."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["welcome_enabled"] = not guild_config["welcome_enabled"]
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
+
         status = "enabled" if guild_config["welcome_enabled"] else "disabled"
         embed = discord.Embed(
             title="✅ Welcome Toggled",
@@ -239,7 +250,8 @@ class WelcomeCog(commands.Cog):
         """Toggle goodbye messages on/off."""
         guild_config = self._get_guild_config(interaction.guild_id)
         guild_config["goodbye_enabled"] = not guild_config["goodbye_enabled"]
-        self._save_config()
+        self._save_guild_config(interaction.guild_id, guild_config)
+
         status = "enabled" if guild_config["goodbye_enabled"] else "disabled"
         embed = discord.Embed(
             title="✅ Goodbye Toggled",
@@ -254,8 +266,8 @@ class WelcomeCog(commands.Cog):
         """Display all settings."""
         guild_config = self._get_guild_config(interaction.guild_id)
 
-        welcome_ch = interaction.guild.get_channel(guild_config["welcome_channel_id"]) if interaction.guild else None
-        goodbye_ch = interaction.guild.get_channel(guild_config["goodbye_channel_id"]) if interaction.guild else None
+        welcome_ch = interaction.guild.get_channel(guild_config["welcome_channel_id"])
+        goodbye_ch = interaction.guild.get_channel(guild_config["goodbye_channel_id"])
 
         embed = discord.Embed(
             title="🎉 Welcome System Settings",
@@ -302,10 +314,8 @@ class WelcomeCog(commands.Cog):
             await interaction.response.send_message("❌ Welcome channel not set. Use `/set_welcome_channel` first.", ephemeral=True)
             return
 
-        member = None
-        if interaction.guild is not None:
-            member = interaction.guild.get_member(interaction.user.id)
-        member = member or interaction.user
+        # Use the command user as the simulated member
+        member = interaction.guild.get_member(interaction.user.id) or interaction.user
         if isinstance(member, discord.Member):
             await self.on_member_join(member)
         await interaction.response.send_message("✅ Test welcome message sent!", ephemeral=True)
@@ -319,15 +329,13 @@ class WelcomeCog(commands.Cog):
             await interaction.response.send_message("❌ Goodbye channel not set. Use `/set_goodbye_channel` first.", ephemeral=True)
             return
 
-        member = None
-        if interaction.guild is not None:
-            member = interaction.guild.get_member(interaction.user.id)
-        member = member or interaction.user
+        member = interaction.guild.get_member(interaction.user.id) or interaction.user
         if isinstance(member, discord.Member):
             await self.on_member_remove(member)
         await interaction.response.send_message("✅ Test goodbye message sent!", ephemeral=True)
 
-# -------------------- Setup function --------------------
+
+# -------------------- Setup function for the cog --------------------
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(WelcomeCog(bot))
