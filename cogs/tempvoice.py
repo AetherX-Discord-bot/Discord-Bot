@@ -24,7 +24,8 @@ class TempVoice(commands.Cog):
                     guild_id TEXT PRIMARY KEY,
                     creator_channel_id TEXT,
                     category_id TEXT,
-                    staff_role_id TEXT
+                    staff_role_id TEXT,
+                    users TEXT
                 )
             """)
     
