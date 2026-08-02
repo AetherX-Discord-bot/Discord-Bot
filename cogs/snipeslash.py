@@ -1,4 +1,3 @@
-# slash/snipe.py
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -8,24 +7,27 @@ class SlashSnipe(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
+    @commands.hybrid_command(
         name="snipe",
         description="Show the most recently deleted message in this channel"
     )
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
-    async def snipe(self, interaction: discord.Interaction):
-        # interaction.channel / interaction.guild may be None in some contexts; fall back to IDs
-        channel_id = interaction.channel.id if interaction.channel is not None else getattr(interaction, "channel_id", None)
-        guild_id = interaction.guild.id if interaction.guild is not None else getattr(interaction, "guild_id", None)
+    async def snipe(self, ctx: commands.Context):
+
+        channel_id = ctx.channel.id if ctx.channel is not None else getattr(ctx, "channel_id", None)
+        guild_id = ctx.guild.id if ctx.guild is not None else getattr(ctx, "guild_id", None)
 
         deleted = SnipeData.last_deleted.get(channel_id)
 
         if not deleted:
-            await interaction.response.send_message("No recently deleted messages to snipe!", ephemeral=True)
+            interaction = getattr(ctx, "interaction", None)
+            if interaction is not None and getattr(interaction, "response", None) is not None:
+                await interaction.response.send_message("No recently deleted messages to snipe!", ephemeral=True)
+            else:
+                await ctx.send("No recently deleted messages to snipe!")
             return
 
-        # Build a jump link only if we have both guild and channel ids
         if guild_id is not None and channel_id is not None:
             message_link = f"https://discord.com/channels/{guild_id}/{channel_id}/{deleted['message_id']}"
         else:
@@ -61,7 +63,7 @@ class SlashSnipe(commands.Cog):
                 inline=False
             )
 
-        await interaction.response.send_message(embed=embed)
+        await ctx.channel.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(SlashSnipe(bot))

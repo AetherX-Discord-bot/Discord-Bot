@@ -13,14 +13,12 @@ class AboutCog(commands.Cog):
         description="Shows information about the bot"
     )
     async def about(self, ctx: commands.Context):
-        # Create an embed
         about_embed = discord.Embed(
             title="AetherX Bot Information",
             description="AetherX is a custom Discord bot designed by Androgalaxi and snowekitsune.\n\nInvite the bot to your server using [this link](https://discord.com/oauth2/authorize?client_id=1067646246254284840&permissions=582056601447606&integration_type=0&scope=bot) or the link below.",
-            color=0x7289da  # Discord's blurple color
+            color=0x7289da
         )
 
-        # Add fields to the embed
         about_embed.add_field(
             name="Developers",
             value="[Androgalaxi](https://discord.com/users/435125886996709377), [lmutt090](https://discord.com/users/1286383453016686705), and [snowekitsune](https://discord.com/users/811016330517676073)",
@@ -28,7 +26,7 @@ class AboutCog(commands.Cog):
         )
         about_embed.add_field(
             name="Bot Version",
-            value="0.1.0",
+            value="0.2.0-alpha",
             inline=False
         )
         about_embed.add_field(
@@ -52,12 +50,10 @@ class AboutCog(commands.Cog):
             inline=False
         )
 
-        # Set the footer
         about_embed.set_footer(
             text="AetherX - Created by Androgalaxi, lmutt090, snowekitsune, and many other wonderful people"
         )
 
-        # Send the embed as a response
         await ctx.send(embed=about_embed)
 
     @commands.command(name="help", description="Show help for all cogs or commands.", hidden=True)
@@ -67,7 +63,6 @@ class AboutCog(commands.Cog):
             title=f"{self.bot.user.name} Help" if self.bot.user else "Bot Help",
             color=discord.Color.green()
         )
-        # If 'list' is passed, show all commands as before
         if arg and arg.strip().lower() == "list":
             embed.description = "List of all available commands:"
             for cog_name, cog in self.bot.cogs.items():
@@ -86,7 +81,6 @@ class AboutCog(commands.Cog):
                         value="\n".join(commands_list),
                         inline=False
                     )
-            # Also include uncategorized commands (not in a cog)
             uncategorized = []
             for cmd in self.bot.commands:
                 if not cmd.cog and not cmd.hidden:
@@ -101,7 +95,6 @@ class AboutCog(commands.Cog):
             embed.set_footer(text=f"Requested by {ctx.author}")
             await ctx.send(embed=embed)
             return
-        # If a cog name is passed, show commands for that cog, with pagination support
         if arg:
             import re
             match = re.match(r"([a-zA-Z0-9_]+)(\d+)?$", arg.strip())
@@ -111,7 +104,6 @@ class AboutCog(commands.Cog):
                 cog_arg = arg
             cog = self.bot.cogs.get(cog_arg)
             if not cog:
-                # Try case-insensitive match
                 cog = next((c for n, c in self.bot.cogs.items() if n.lower() == cog_arg.lower()), None)
             if cog:
                 commands_list = []
@@ -180,10 +172,8 @@ class AboutCog(commands.Cog):
                 embed = discord.Embed(description=f"Cog '{arg}' not found.", color=discord.Color.red())
                 await ctx.send(embed=embed)
                 return
-        # Default: show all cogs in a compact dropdown; selecting a cog shows its commands
         embed.description = "Select a category below to see its commands. Use `$help <cog>` to view commands in a category."
 
-        # Build list of available cogs and their commands for this user
         cogs_available = []
         for cog_name, cog in self.bot.cogs.items():
             commands_list = []
@@ -203,7 +193,6 @@ class AboutCog(commands.Cog):
             await ctx.send(embed=embed)
             return
 
-        # Create select options (max 25)
         options = []
         for cog_name, cog, commands_list in cogs_available[:25]:
             desc = (getattr(cog, '__doc__', '') or '').strip()
@@ -231,7 +220,6 @@ class AboutCog(commands.Cog):
                 cog_embed.add_field(name=f"Commands ({len(lines)})", value='\n'.join(lines)[:1024] or 'No commands.', inline=False)
                 cog_embed.set_footer(text=f"Requested by {self.ctx.author}")
 
-                # Add back button
                 back_view = View()
                 class BackButton(Button):
                     def __init__(self):
@@ -242,7 +230,6 @@ class AboutCog(commands.Cog):
 
                 await interaction.response.edit_message(embed=cog_embed, view=back_view)
 
-        # Map for quick lookup
         cogs_map = {name: (cog, cmds) for name, cog, cmds in cogs_available}
 
         select = HelpSelect(options, ctx, cogs_map)

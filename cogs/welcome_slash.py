@@ -10,8 +10,8 @@ class WelcomeCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.db_path = "AetherX.db"               # Your database file
-        self.config_cache: Dict[str, dict] = {}   # guild_id_str -> settings
+        self.db_path = "AetherX.db"
+        self.config_cache: Dict[str, dict] = {}
         self._init_db()
         self._load_all_configs()
 
@@ -73,7 +73,6 @@ class WelcomeCog(commands.Cog):
                 config.get("join_role_id")
             ))
             conn.commit()
-        # Update cache
         self.config_cache[gid_str] = config
 
     def _get_guild_config(self, guild_id: int | None) -> dict:
@@ -97,10 +96,9 @@ class WelcomeCog(commands.Cog):
 
     async def _assign_join_role(self, member: discord.Member, guild_config: dict):
         """Assign a default role to the member if configured."""
-        # Get the role ID from your config (you'll need to store it in the DB)
         role_id = guild_config.get("join_role_id")
         if not role_id:
-            return  # no role configured, just skip
+            return
     
         role = member.guild.get_role(role_id)
         if role is None:
@@ -351,7 +349,6 @@ class WelcomeCog(commands.Cog):
             await interaction.response.send_message("❌ Welcome channel not set. Use `/set_welcome_channel` first.", ephemeral=True)
             return
 
-        # Use the command user as the simulated member
         member = interaction.guild.get_member(interaction.user.id) if interaction.guild else None
         member = member or interaction.user
         if isinstance(member, discord.Member):

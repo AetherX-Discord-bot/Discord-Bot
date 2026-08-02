@@ -12,10 +12,9 @@ class DevToolsCog(commands.Cog):
         self.bot = bot
         self.allowed_ids = {435125886996709377, 811016330517676073}
         self.notify = {435125886996709377, 811016330517676073}
-        self.log_config = {}  # {guild_id: channel_id}
+        self.log_config = {}
         self.load_config()
         self.restart_data = {}
-        # Track if restart notification has been sent
         self._restart_completed = False
 
     def load_config(self):
@@ -40,8 +39,7 @@ class DevToolsCog(commands.Cog):
                 )
                 embed.set_author(name=author.display_name, icon_url=author.display_avatar.url)
                 
-                # Add server info if not from DM
-                if isinstance(author, discord.User):  # DM context
+                if isinstance(author, discord.User):
                     embed.set_footer(text="Submitted via DM")
                 else:
                     embed.set_footer(text=f"Server: {author.guild.name} ({guild_id})")
@@ -54,12 +52,10 @@ class DevToolsCog(commands.Cog):
         if ctx.author.id not in self.allowed_ids:
             return await ctx.send("❌ Developer-only command!", ephemeral=True)
 
-        # Always log to file
         log_source = "DM" if isinstance(ctx.channel, discord.DMChannel) else f"{ctx.guild.name} ({ctx.guild.id})"
         with open("Devlog.txt", "a", encoding="utf-8") as f:
             f.write(f"[{datetime.now()}] {ctx.author} (From: {log_source}): {message}\n")
 
-        # Send to all configured server channels
         await self.send_to_all_log_channels(message, ctx.author)
         
         await ctx.send("📝 Note logged to ALL dev channels!", ephemeral=True)
@@ -88,12 +84,10 @@ class DevToolsCog(commands.Cog):
     async def sync_commands(self, ctx):
         """Sync application commands globally (Owner Only)"""
         try:
-            # Sync slash commands (modern approach)
             if hasattr(self.bot, 'tree'):
                 await self.bot.tree.sync()
                 msg = "✅ Slash commands synced globally!"
             
-            # Fallback for prefix commands (legacy)
             else:
                 synced = await self.bot.sync_commands()
                 msg = f"✅ Synced {len(synced)} commands!"
@@ -110,7 +104,6 @@ class DevToolsCog(commands.Cog):
             await ctx.send("❌ You don't have permission to use this command!")
             return
 
-        # Store restart info in a file to persist across restarts
         restart_info = {
             'reason': reason,
             'initiator_id': ctx.author.id,
@@ -118,11 +111,9 @@ class DevToolsCog(commands.Cog):
             'time': datetime.now().isoformat()
         }
         
-        # Save restart info to a file
         with open("restart_info.json", "w") as f:
             json.dump(restart_info, f)
 
-        # DM all specified users about the restart
         for user_id in self.notify:
             try:
                 user = await self.bot.fetch_user(user_id)
@@ -139,7 +130,6 @@ class DevToolsCog(commands.Cog):
             except Exception as e:
                 print(f"Couldn't DM {user_id}: {e}")
 
-        # Confirm in channel
         embed = discord.Embed(
             title="🔄 Restarting...",
             description=f"Bot will reboot with PID {os.getpid()}",
@@ -148,9 +138,8 @@ class DevToolsCog(commands.Cog):
         embed.add_field(name="Reason", value=reason, inline=False)
         await ctx.send(embed=embed)
 
-        # Graceful restart
         try:
-            await asyncio.sleep(2)  # Give time for messages to send
+            await asyncio.sleep(2)
             os.execv(sys.executable, ['python'] + sys.argv)
         except Exception as e:
             err_msg = f"❌ Restart failed: {type(e).__name__}: {e}"
@@ -165,22 +154,18 @@ class DevToolsCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         """Send DMs to all allowed users when bot comes online after restart"""
-        # Only run once per restart
         if self._restart_completed:
             return
             
-        # Check if restart_info file exists
         if os.path.exists("restart_info.json"):
             try:
                 with open("restart_info.json", "r") as f:
                     restart_info = json.load(f)
                 
-                # Send DMs to ALL allowed users (not just notify group)
                 for user_id in self.allowed_ids:
                     try:
                         user = await self.bot.fetch_user(user_id)
                         
-                        # Create restart completion embed
                         embed = discord.Embed(
                             title="✅ Bot Online",
                             description="The bot has successfully restarted and is now online.",
@@ -188,7 +173,6 @@ class DevToolsCog(commands.Cog):
                             timestamp=datetime.utcnow()
                         )
                         
-                        # Add restart details if available
                         if 'reason' in restart_info:
                             embed.add_field(
                                 name="Restart Reason",
@@ -229,7 +213,6 @@ class DevToolsCog(commands.Cog):
                     except Exception as e:
                         print(f"Error sending DM to {user_id}: {e}")
                 
-                # Clean up the restart info file
                 os.remove("restart_info.json")
                 
             except json.JSONDecodeError:
@@ -237,10 +220,8 @@ class DevToolsCog(commands.Cog):
             except Exception as e:
                 print(f"Error processing restart notification: {e}")
         
-        # Mark as completed
         self._restart_completed = True
         
-        # Also log to console
         print(f"✅ {self.bot.user} is online and ready!")
 
 async def setup(bot):

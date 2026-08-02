@@ -24,7 +24,6 @@ class NukeView(discord.ui.View):
         self.value = True
         self.stop()
         
-        # Disable all buttons
         for child in self.children:
             if isinstance(child, discord.ui.Button):
                 child.disabled = True
@@ -42,7 +41,6 @@ class NukeView(discord.ui.View):
         self.value = False
         self.stop()
         
-        # Disable all buttons
         for child in self.children:
             if isinstance(child, discord.ui.Button):
                 child.disabled = True
@@ -83,7 +81,6 @@ class SoftNukeView(discord.ui.View):
         self.value = True
         self.stop()
         
-        # Disable all buttons
         for child in self.children:
             if isinstance(child, discord.ui.Button):
                 child.disabled = True
@@ -101,7 +98,6 @@ class SoftNukeView(discord.ui.View):
         self.value = False
         self.stop()
         
-        # Disable all buttons
         for child in self.children:
             if isinstance(child, discord.ui.Button):
                 child.disabled = True
@@ -137,8 +133,8 @@ class NukeCog(commands.Cog, name="Nuke"):
     
     def __init__(self, bot):
         self.bot = bot
-        self.emoji = "💥"  # Emoji for the help command
-        self.active_nukes = {}  # Track active nukes to prevent multiple
+        self.emoji = "💥"
+        self.active_nukes = {}
         
     async def execute_nuke(self, ctx, reason):
         """Execute the nuke after confirmation"""
@@ -149,10 +145,8 @@ class NukeCog(commands.Cog, name="Nuke"):
         self.active_nukes[channel_id] = True
         
         try:
-            # AetherX-style embed colors
-            EMBED_COLOR = 0x2b2d31  # Discord dark theme color
+            EMBED_COLOR = 0x2b2d31
             
-            # Send countdown embed
             embed = discord.Embed(
                 title="🚀 **NUKE COUNTDOWN** 🚀",
                 description=f"**Channel:** {ctx.channel.mention}\n**By:** {ctx.author.mention}\n\n```yaml\nWARNING: Channel will be nuked in 5 seconds...\n```",
@@ -162,13 +156,11 @@ class NukeCog(commands.Cog, name="Nuke"):
             
             countdown_msg = await ctx.send(embed=embed)
             
-            # Countdown
             for i in range(5, 0, -1):
                 await asyncio.sleep(1)
                 embed.description = f"**Channel:** {ctx.channel.mention}\n**By:** {ctx.author.mention}\n\n```yaml\nWARNING: Channel will be nuked in {i} seconds...\n```"
                 await countdown_msg.edit(embed=embed)
             
-            # Store channel properties
             channel = ctx.channel
             properties = {
                 'name': channel.name,
@@ -181,7 +173,6 @@ class NukeCog(commands.Cog, name="Nuke"):
                 'reason': f"Nuked by {ctx.author} ({ctx.author.id}): {reason}"
             }
             
-            # Handle different channel types
             if isinstance(channel, discord.TextChannel):
                 properties['type'] = 'text'
             elif isinstance(channel, discord.VoiceChannel):
@@ -196,10 +187,8 @@ class NukeCog(commands.Cog, name="Nuke"):
             else:
                 properties['type'] = 'text'
             
-            # Delete the channel
             await channel.delete(reason=properties['reason'])
             
-            # Recreate based on type
             new_channel = None
             if properties['type'] == 'text':
                 new_channel = await ctx.guild.create_text_channel(
@@ -233,7 +222,6 @@ class NukeCog(commands.Cog, name="Nuke"):
             else:
                 return
             
-            # Send success embed in new channel
             success_embed = discord.Embed(
                 title="💥 **CHANNEL NUKED** 💥",
                 description=(
@@ -251,11 +239,9 @@ class NukeCog(commands.Cog, name="Nuke"):
             
             await new_channel.send(embed=success_embed)
             
-            # Log to audit log if available
             await self.log_nuke(ctx, properties, new_channel, reason)
             
         except Exception as e:
-            # If something goes wrong, notify in DMs
             try:
                 error_embed = discord.Embed(
                     title="❌ Nuke Failed",
@@ -264,9 +250,8 @@ class NukeCog(commands.Cog, name="Nuke"):
                 )
                 await ctx.author.send(embed=error_embed)
             except:
-                pass  # Can't even DM the user
+                pass
         finally:
-            # Clean up active nukes tracking
             if channel_id in self.active_nukes:
                 del self.active_nukes[channel_id]
     
@@ -275,7 +260,6 @@ class NukeCog(commands.Cog, name="Nuke"):
         try:
             EMBED_COLOR = 0x2b2d31
             
-            # Start purging
             embed = discord.Embed(
                 title="🧹 **CLEANING CHANNEL** 🧹",
                 description="Deleting all messages... This may take a while.",
@@ -283,7 +267,6 @@ class NukeCog(commands.Cog, name="Nuke"):
             )
             status_msg = await ctx.send(embed=embed)
             
-            # Purge messages (excluding pins and our status message)
             def not_pinned_or_status(m):
                 return not m.pinned and m.id != status_msg.id
             
@@ -293,7 +276,6 @@ class NukeCog(commands.Cog, name="Nuke"):
                 reason=f"Soft nuke by {ctx.author}: {reason}"
             )
             
-            # Send completion message
             embed = discord.Embed(
                 title="✅ **CHANNEL CLEARED** ✅",
                 description=(
@@ -309,7 +291,6 @@ class NukeCog(commands.Cog, name="Nuke"):
             
             await status_msg.edit(embed=embed)
             
-            # Log soft nuke
             await self.log_soft_nuke(ctx, len(deleted), reason)
             
         except Exception as e:
@@ -338,7 +319,7 @@ class NukeCog(commands.Cog, name="Nuke"):
                         f"**Reason:** `{reason}`\n"
                         f"**New Channel:** {new_channel.mention}"
                     ),
-                    color=0xe74c3c  # Red for destructive actions
+                    color=0xe74c3c
                 )
                 log_embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
                 log_embed.set_footer(text=f"Channel ID: {new_channel.id}")
@@ -365,7 +346,7 @@ class NukeCog(commands.Cog, name="Nuke"):
                         f"**Moderator ID:** `{ctx.author.id}`\n"
                         f"**Reason:** `{reason}`"
                     ),
-                    color=0xf39c12  # Orange for warning actions
+                    color=0xf39c12
                 )
                 log_embed.set_author(name=ctx.author, icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
                 log_embed.set_footer(text=f"Channel ID: {ctx.channel.id}")
@@ -387,11 +368,10 @@ class NukeCog(commands.Cog, name="Nuke"):
     )
     @commands.has_permissions(administrator=True)
     @commands.bot_has_permissions(manage_channels=True)
-    @commands.cooldown(1, 30, commands.BucketType.guild)  # 30 second cooldown per guild
+    @commands.cooldown(1, 30, commands.BucketType.guild)
     async def nuke_channel(self, ctx, *, reason: Optional[str] = "No reason provided"):
         """Nukes the current channel with button confirmation"""
         
-        # Prevent multiple nukes on same channel
         if ctx.channel.id in self.active_nukes:
             embed = discord.Embed(
                 title="⚠️ **NUKE IN PROGRESS** ⚠️",
@@ -401,7 +381,6 @@ class NukeCog(commands.Cog, name="Nuke"):
             await ctx.send(embed=embed, delete_after=10)
             return
         
-        # AetherX-style embed
         EMBED_COLOR = 0x2b2d31
         
         embed = discord.Embed(
@@ -417,11 +396,10 @@ class NukeCog(commands.Cog, name="Nuke"):
             ),
             color=EMBED_COLOR
         )
-        embed.set_thumbnail(url="https://i.imgur.com/cj2KuzF.png")  # Warning icon
+        embed.set_thumbnail(url="https://i.imgur.com/cj2KuzF.png")
         embed.set_footer(text="AetherX • This action requires confirmation")
         embed.timestamp = discord.utils.utcnow()
         
-        # Create and send view
         view = NukeView(ctx, self, reason)
         view.message = await ctx.send(embed=embed, view=view)
     
@@ -456,11 +434,10 @@ class NukeCog(commands.Cog, name="Nuke"):
             ),
             color=EMBED_COLOR
         )
-        embed.set_thumbnail(url="https://i.imgur.com/3JvQ2Zz.png")  # Clean icon
+        embed.set_thumbnail(url="https://i.imgur.com/3JvQ2Zz.png")
         embed.set_footer(text="AetherX • This action requires confirmation")
         embed.timestamp = discord.utils.utcnow()
         
-        # Create and send view
         view = SoftNukeView(ctx, self, reason)
         view.message = await ctx.send(embed=embed, view=view)
     

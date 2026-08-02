@@ -23,25 +23,21 @@ class ServerList(commands.Cog):
             return
         
         try:
-            # Try to fetch owner information
             owner = guild.owner
             if owner is None and guild.owner_id is not None:
                 owner = await guild.fetch_member(guild.owner_id)
             owner_name = str(owner) if owner else f"Unknown (ID: {guild.owner_id})"
 
-            # Create embed
             embed = discord.Embed(
                 title=f"📊 Server Information: {guild.name}",
                 color=discord.Color.blue(),
                 timestamp=datetime.datetime.now()
             )
             
-            # Basic info
             embed.add_field(name="🆔 Server ID", value=guild.id, inline=True)
             embed.add_field(name="👑 Owner", value=owner_name, inline=True)
             embed.add_field(name="👥 Members", value=guild.member_count, inline=True)
             
-            # Counts
             text_channels = len([c for c in guild.channels if isinstance(c, discord.TextChannel)])
             voice_channels = len([c for c in guild.channels if isinstance(c, discord.VoiceChannel)])
             categories = len([c for c in guild.channels if isinstance(c, discord.CategoryChannel)])
@@ -50,20 +46,16 @@ class ServerList(commands.Cog):
             embed.add_field(name="🎭 Roles", value=len(guild.roles), inline=True)
             embed.add_field(name="😄 Emojis", value=len(guild.emojis), inline=True)
             
-            # Boosting info
             embed.add_field(name="🚀 Boosts", value=guild.premium_subscription_count, inline=True)
             embed.add_field(name="⭐ Boost Level", value=guild.premium_tier, inline=True)
             
-            # Dates
             created_at = guild.created_at.strftime("%Y-%m-%d %H:%M:%S")
             embed.add_field(name="📅 Created", value=created_at, inline=True)
             
-            # Features
             if guild.features:
                 features = ", ".join(guild.features) if len(guild.features) <= 5 else f"{len(guild.features)} features"
                 embed.add_field(name="✨ Features", value=features, inline=False)
             
-            # Server icon
             if guild.icon:
                 embed.set_thumbnail(url=guild.icon.url)
             
@@ -81,7 +73,6 @@ class ServerList(commands.Cog):
         if not await self.is_allowed(ctx):
             return await ctx.send("You don't have permission to use this command.")
 
-        # Clean up any previous interaction
         if ctx.author.id in self.active_views:
             old_view = self.active_views.pop(ctx.author.id)
             old_view.stop()
@@ -182,7 +173,6 @@ class ServerList(commands.Cog):
             async def interaction_check(self, interaction: discord.Interaction) -> bool:
                 return interaction.user.id == self.user_id
 
-        # Initialize view
         view = ServerPaginator(ctx.author.id, servers, self.active_views)
         await view.update_buttons()
         message = await ctx.send(embed=await view.create_embed(), view=view)

@@ -18,7 +18,6 @@ class PurgeCog(commands.Cog):
         !purge all             - Deletes all messages (requires admin)
         """
         try:
-            # Handle "all" case
             if amount.lower() == 'all':
                 if not ctx.author.guild_permissions.administrator:
                     await ctx.send("You need administrator permissions to purge all messages.", delete_after=5)
@@ -30,7 +29,6 @@ class PurgeCog(commands.Cog):
                 deleted = await ctx.channel.purge(limit=None, check=non_pinned_check)
                 await ctx.send(f"Deleted {len(deleted)} messages (excluding pinned).", delete_after=5)
                 return
-            # Validate amount (should be a number now)
             try:
                 amt = int(amount)
             except ValueError:
@@ -44,17 +42,14 @@ class PurgeCog(commands.Cog):
                 await ctx.send("Maximum purge limit is 500 messages at once.", delete_after=5)
                 return
             
-            # Add 1 to account for command message
             limit = amt + 1
             
-            # Optional member filter
             def member_check(msg):
                 if member:
                     return msg.author == member
                 return True
             deleted = await ctx.channel.purge(limit=limit, check=member_check)
             
-            # Send confirmation
             msg = f"Deleted {len(deleted) - 1} messages"
             if member:
                 msg += f" from {member.display_name}"

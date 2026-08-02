@@ -38,16 +38,9 @@ class ScheduleCog(commands.Cog):
     async def on_ready(self):
         await self.init_db()
 
-    @app_commands.command(
+    @commands.hybrid_command(
         name="schedule-announcement",
         description="Schedule a message to be sent at a specific time"
-    )
-    @app_commands.describe(
-        channel="Channel to send the message in",
-        message="The message to send",
-        datetime="When to send (YYYY-MM-DD HH:MM, 24h format)",
-        timezone="Your timezone",
-        ping_role="Role to ping with the message (optional)"
     )
     @app_commands.choices(
         timezone=[
@@ -61,7 +54,7 @@ class ScheduleCog(commands.Cog):
     )
     async def schedule_announcement(
         self,
-        interaction: discord.Interaction,
+        ctx: commands.Context,
         channel: discord.TextChannel,
         message: str,
         datetime: str,
@@ -70,60 +63,66 @@ class ScheduleCog(commands.Cog):
     ):
         """Schedule an announcement for a specific time"""
         # Permission check
-        if not interaction.permissions.manage_messages:
-            await interaction.response.send_message(
-                "❌ You need the 'Manage Messages' permission to use this command.",
-                ephemeral=True
-            )
+        author = ctx.author
+        if not isinstance(author, discord.Member) or not author.guild_permissions.manage_messages:
+            await ctx.send("❌ You need the 'Manage Messages' permission to use this command.", delete_after=10)
             return
 
-        # Validate bot permissions in target channel
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "❌ This command must be used in a guild.",
-                ephemeral=True
-            )
+        interaction = getattr(ctx, "interaction", None)
+
+        guild = ctx.guild or (interaction.guild if interaction else None)
+        if guild is None:
+            if interaction:
+                await interaction.response.send_message("❌ This command must be used in a guild.", ephemeral=True)
+            else:
+                await ctx.send("❌ This command must be used in a guild.")
             return
 
-        # Safely get the bot member in the guild
-        bot_member = interaction.guild.me or interaction.guild.get_member(self.bot.user.id)
-        bot_permissions = channel.permissions_for(bot_member)
+        bot_member = guild.me or guild.get_member(self.bot.user.id)
+        if bot_member is None:
+            everyone_role = getattr(guild, 'default_role', None)
+            if everyone_role is None:
+                from typing import cast
+                class _Fake:
+                    pass
+                bot_permissions = channel.permissions_for(cast(discord.Role, _Fake()))
+            else:
+                bot_permissions = channel.permissions_for(everyone_role)
+        else:
+            bot_permissions = channel.permissions_for(bot_member)
         if not bot_permissions.send_messages:
-            await interaction.response.send_message(
-                f"❌ I don't have permission to send messages in {channel.mention}.",
-                ephemeral=True
-            )
+            if interaction:
+                await interaction.response.send_message(f"❌ I don't have permission to send messages in {channel.mention}.", ephemeral=True)
+            else:
+                await ctx.send(f"❌ I don't have permission to send messages in {channel.mention}.")
             return
 
         try:
-            # Parse datetime
             scheduled_time = self.parse_datetime(datetime, timezone.value)
             
             if scheduled_time <= discord.utils.utcnow():
-                await interaction.response.send_message(
-                    "❌ Please select a future date and time.",
-                    ephemeral=True
-                )
+                if interaction:
+                    await interaction.response.send_message("❌ Please select a future date and time.", ephemeral=True)
+                else:
+                    await ctx.send("❌ Please select a future date and time.")
                 return
 
-            # Save to database
             async with aiosqlite.connect('scheduled_messages.db') as db:
                 await db.execute('''
                     INSERT INTO scheduled_messages 
                     (guild_id, channel_id, message, scheduled_time, timezone, ping_role_id, author_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', (
-                    interaction.guild_id,
+                    guild.id,
                     channel.id,
                     message,
                     scheduled_time.isoformat(),
                     timezone.value,
                     ping_role.id if ping_role else None,
-                    interaction.user.id
+                    ctx.author.id
                 ))
                 await db.commit()
 
-            # Format nice confirmation message
             local_time = scheduled_time.astimezone(pytz.timezone(timezone.value))
             time_str = local_time.strftime('%Y-%m-%d %H:%M %Z')
             
@@ -134,30 +133,30 @@ class ScheduleCog(commands.Cog):
             if ping_role:
                 response += f"\n**Will ping:** {ping_role.mention}"
 
-            await interaction.response.send_message(response, ephemeral=True)
+            if interaction:
+                await interaction.response.send_message(response, ephemeral=True)
+            else:
+                await ctx.send(response)
 
         except ValueError as e:
-            await interaction.response.send_message(
-                f"❌ Invalid date/time format: {str(e)}\nUse: YYYY-MM-DD HH:MM (24h format)",
-                ephemeral=True
-            )
+            if interaction:
+                await interaction.response.send_message(f"❌ Invalid date/time format: {str(e)}\nUse: YYYY-MM-DD HH:MM (24h format)", ephemeral=True)
+            else:
+                await ctx.send(f"❌ Invalid date/time format: {str(e)}\nUse: YYYY-MM-DD HH:MM (24h format)")
         except Exception as e:
-            await interaction.response.send_message(
-                f"❌ An error occurred: {str(e)}",
-                ephemeral=True
-            )
+            if interaction:
+                await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+            else:
+                await ctx.send(f"❌ An error occurred: {str(e)}")
 
     def parse_datetime(self, datetime_str: str, timezone_str: str) -> datetime:
         """Parse datetime string with timezone and return UTC datetime"""
         try:
-            # Parse the datetime string
             naive_dt = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
             
-            # Localize to the specified timezone
             tz = pytz.timezone(timezone_str)
             localized_dt = tz.localize(naive_dt)
             
-            # Convert to UTC
             utc_dt = localized_dt.astimezone(pytz.UTC)
             
             return utc_dt
@@ -171,33 +170,28 @@ class ScheduleCog(commands.Cog):
             now = discord.utils.utcnow()
             
             async with aiosqlite.connect('scheduled_messages.db') as db:
-                # Get due messages
                 async with db.execute(
                     'SELECT * FROM scheduled_messages WHERE scheduled_time <= ?',
                     (now.isoformat(),)
                 ) as cursor:
                     due_messages = await cursor.fetchall()
 
-                # Send messages and delete from database
                 for msg in due_messages:
                     try:
                         channel = self.bot.get_channel(msg[2])  # channel_id
                         if channel:
-                            final_message = msg[3]  # message content
+                            final_message = msg[3]
                             
-                            # Add role ping if specified
-                            if msg[6]:  # ping_role_id
+                            if msg[6]:
                                 final_message = f"<@&{msg[6]}> {final_message}"
                             
                             await channel.send(final_message)
                         
-                        # Delete the scheduled message after sending
                         await db.execute('DELETE FROM scheduled_messages WHERE id = ?', (msg[0],))
                         await db.commit()
                         
                     except Exception as e:
                         print(f"Failed to send scheduled message {msg[0]}: {e}")
-                        # Optionally notify the author about the failure
                         
         except Exception as e:
             print(f"Error in scheduled message check: {e}")
@@ -206,7 +200,6 @@ class ScheduleCog(commands.Cog):
     async def before_check_scheduled_messages(self):
         await self.bot.wait_until_ready()
 
-    # Optional: Command to list scheduled messages
     @app_commands.command(
         name="list-scheduled",
         description="List all scheduled messages for this server"
@@ -243,7 +236,6 @@ class ScheduleCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    # Optional: Command to cancel scheduled messages
     @app_commands.command(
         name="cancel-scheduled",
         description="Cancel a scheduled message"
@@ -252,7 +244,6 @@ class ScheduleCog(commands.Cog):
     async def cancel_scheduled(self, interaction: discord.Interaction, message_id: int):
         """Cancel a scheduled message"""
         async with aiosqlite.connect('scheduled_messages.db') as db:
-            # Check if message exists and belongs to this guild
             async with db.execute(
                 'SELECT * FROM scheduled_messages WHERE id = ? AND guild_id = ?',
                 (message_id, interaction.guild_id)
@@ -266,7 +257,6 @@ class ScheduleCog(commands.Cog):
                 )
                 return
 
-            # Delete the scheduled message
             await db.execute('DELETE FROM scheduled_messages WHERE id = ?', (message_id,))
             await db.commit()
 
