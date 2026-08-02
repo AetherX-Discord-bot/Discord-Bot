@@ -2,7 +2,7 @@
 config.json
 schedules_messages.db
 welcome_config.json
-__pycache__/
+__pycache__
 .vscode/
 Temp Backup Code.txt
 AetherX.db
