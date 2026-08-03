@@ -26,24 +26,24 @@ class TempVoice(commands.Cog):
                     creator_channel_id INT,
                     category_id INT,
                     staff_role_id INT,
-                    users_id INT,
+                    tempvoice_setups_id INT,
                     tempvc_id INT
                 )
             """)
     
             cursor.execute("""
                 SELECT name FROM sqlite_master
-                WHERE type='table' AND name='users'
+                WHERE type='table' AND name='tempvoice_setups'
             """)
-            users_table_exists = cursor.fetchone() is not None
+            tempvoice_setups_table_exists = cursor.fetchone() is not None
     
-            if users_table_exists:
-                cursor.execute("PRAGMA table_info(users)")
+            if tempvoice_setups_table_exists:
+                cursor.execute("PRAGMA table_info(tempvoice_setups)")
                 columns = [row[1] for row in cursor.fetchall()]
     
                 if "tmpvcsettings" not in columns:
                     cursor.execute("""
-                        ALTER TABLE users
+                        ALTER TABLE tempvoice_setups
                         ADD COLUMN tmpvcsettings TEXT
                     """)
     
@@ -75,7 +75,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -98,7 +98,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
-                        "UPDATE users SET tmpvcsettings = ? WHERE user_id = ?",
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
                         (json.dumps(db_data), user_id_str)
                     )
                     conn.commit()
@@ -170,7 +170,7 @@ class TempVoice(commands.Cog):
             description=(
                 f"**Creator Channel:** {creator_channel.mention}\n"
                 f"**Category:** {category.mention}\n"
-                f"Users can now join {creator_channel.mention} to create their own temporary voice channel!\n"
+                f"tempvoice_setups can now join {creator_channel.mention} to create their own temporary voice channel!\n"
                 f"*Note: New channels will be open for anyone to join by default.*"
             ),
             color=discord.Color.green(),
@@ -422,7 +422,7 @@ class TempVoice(commands.Cog):
                     cursor = conn.cursor()
 
                     cursor.execute(
-                        "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                        "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                         (user_id_str,)
                     )
                     row = cursor.fetchone()
@@ -441,7 +441,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][str(temp_channel.id)] = True
 
                     cursor.execute(
-                        "UPDATE users SET tmpvcsettings = ? WHERE user_id = ?",
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
                         (json.dumps(db_data), user_id_str)
                     )
                     conn.commit()
@@ -469,7 +469,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -492,7 +492,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
-                        "UPDATE users SET tmpvcsettings = ? WHERE user_id = ?",
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
                         (json.dumps(db_data), user_id_str)
                     )
                     conn.commit()
