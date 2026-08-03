@@ -24,17 +24,12 @@ class TempVoice(commands.Cog):
                     guild_id TEXT PRIMARY KEY,
                     creator_channel_id TEXT,
                     category_id TEXT,
-                    staff_role_id TEXT
-                )
-            """)
-    
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
+                    staff_role_id TEXT,
                     user_id TEXT PRIMARY KEY,
                     tmpvcsettings TEXT
                 )
             """)
-    
+
             conn.commit()
 
     async def _update_tmpvc_permissions(self, channel):
