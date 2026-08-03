@@ -25,7 +25,7 @@ class TempVoice(commands.Cog):
                     creator_channel_id TEXT,
                     category_id TEXT,
                     staff_role_id TEXT,
-                    users TEXT
+                    users_id TEXT
                 )
             """)
     
