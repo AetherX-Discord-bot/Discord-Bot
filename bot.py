@@ -122,8 +122,6 @@ async def on_ready():
     await bot.change_presence(activity=discord.Game(name="Version 0.2.0 Alpha out now | $help"))
     database = sqlite3.connect("AetherX.db")
     cursor = database.cursor()
-    cursor.execute("""CREATE TABLE IF NOT EXISTS tempvoice_setups (guild_id INT PRIMARY KEY, creator_channel_id INT, category_id INT, staff_role_id INT, users_id INT, tempvc_id INT)""")
-    database.commit()
     
     steps = [
         ("Syncing slash commands...", bot.tree.sync()),

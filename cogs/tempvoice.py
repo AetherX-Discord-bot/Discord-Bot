@@ -56,7 +56,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -79,7 +79,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
-                        "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
+                        "INSERT OR REPLACE INTO tempvoice_setups (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
                     )
                     conn.commit()
@@ -151,7 +151,7 @@ class TempVoice(commands.Cog):
             description=(
                 f"**Creator Channel:** {creator_channel.mention}\n"
                 f"**Category:** {category.mention}\n"
-                f"Users can now join {creator_channel.mention} to create their own temporary voice channel!\n"
+                f"tempvoice_setups can now join {creator_channel.mention} to create their own temporary voice channel!\n"
                 f"*Note: New channels will be open for anyone to join by default.*"
             ),
             color=discord.Color.green(),
@@ -398,7 +398,7 @@ class TempVoice(commands.Cog):
                     cursor = conn.cursor()
 
                     cursor.execute(
-                        "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                        "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                         (user_id_str,)
                     )
                     row = cursor.fetchone()
@@ -417,7 +417,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][str(temp_channel.id)] = True
 
                     cursor.execute(
-                        "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
+                        "INSERT OR REPLACE INTO tempvoice_setups (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
                     )
                     conn.commit()
@@ -443,7 +443,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -466,7 +466,7 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
-                        "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
+                        "INSERT OR REPLACE INTO tempvoice_setups (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
                     )
                     conn.commit()
