@@ -3,3 +3,5 @@ config.json
 __pycache__
 .vscode/
 AetherX.db
+cookies.txt
+downloads/
