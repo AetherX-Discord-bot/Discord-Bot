@@ -29,7 +29,7 @@ class TempVoice(commands.Cog):
                     tmpvcsettings TEXT
                 )
             """)
-    
+
             conn.commit()
 
     async def _update_tmpvc_permissions(self, channel):
