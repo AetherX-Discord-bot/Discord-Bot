@@ -2,6 +2,12 @@
 config.json
 __pycache__
 .vscode/
+<<<<<<< HEAD
+cookies.txt
+downloads/
+*.db
+=======
 AetherX.db
 cookies.txt
 downloads/
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c

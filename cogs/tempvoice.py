@@ -21,19 +21,45 @@ class TempVoice(commands.Cog):
     
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS tempvoice_setups (
+<<<<<<< HEAD
+                    guild_id INT PRIMARY KEY,
+                    creator_channel_id INT,
+                    category_id INT,
+                    staff_role_id INT,
+                    tempvoice_setups_id INT,
+                    tempvc_id INT
+=======
                     guild_id TEXT PRIMARY KEY,
                     creator_channel_id TEXT,
                     category_id TEXT,
                     staff_role_id TEXT
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                 )
             """)
     
             cursor.execute("""
+<<<<<<< HEAD
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='tempvoice_setups'
+            """)
+            tempvoice_setups_table_exists = cursor.fetchone() is not None
+    
+            if tempvoice_setups_table_exists:
+                cursor.execute("PRAGMA table_info(tempvoice_setups)")
+                columns = [row[1] for row in cursor.fetchall()]
+    
+                if "tmpvcsettings" not in columns:
+                    cursor.execute("""
+                        ALTER TABLE tempvoice_setups
+                        ADD COLUMN tmpvcsettings TEXT
+                    """)
+=======
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
                     tmpvcsettings TEXT
                 )
             """)
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
     
             conn.commit()
 
@@ -61,7 +87,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -84,8 +110,13 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
+<<<<<<< HEAD
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
+                        (json.dumps(db_data), user_id_str)
+=======
                         "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                     )
                     conn.commit()
 
@@ -156,7 +187,7 @@ class TempVoice(commands.Cog):
             description=(
                 f"**Creator Channel:** {creator_channel.mention}\n"
                 f"**Category:** {category.mention}\n"
-                f"Users can now join {creator_channel.mention} to create their own temporary voice channel!\n"
+                f"tempvoice_setups can now join {creator_channel.mention} to create their own temporary voice channel!\n"
                 f"*Note: New channels will be open for anyone to join by default.*"
             ),
             color=discord.Color.green(),
@@ -321,13 +352,13 @@ class TempVoice(commands.Cog):
             return
         
         creator_channel_id, category_id, staff_role_id = result
-        
         if after.channel and str(after.channel.id) == creator_channel_id:
             await self.create_temp_channel(member, after.channel, category_id, staff_role_id)
 
         if before.channel and self.is_temp_channel(member.guild.id, before.channel.id):
             await self.check_temp_channel_empty(before.channel)
         
+
         if before.channel and self.is_temp_channel(member.guild.id, before.channel.id):
             guild_id_str = str(member.guild.id)
             channel_id_str = str(before.channel.id)
@@ -384,14 +415,22 @@ class TempVoice(commands.Cog):
                 manage_roles=True
             )
 
+<<<<<<< HEAD
+
+=======
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
             temp_channel = await category.create_voice_channel(
                 name=channel_name,
                 overwrites=overwrites,
                 reason=f"Temporary voice channel for {member}"
             )
+<<<<<<< HEAD
+            await member.move_to(temp_channel)
+=======
             
             await member.move_to(temp_channel)
             
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
             if guild_id not in self.temp_channels:
                 self.temp_channels[guild_id] = {}
             self.temp_channels[guild_id][str(temp_channel.id)] = str(member.id)
@@ -403,7 +442,7 @@ class TempVoice(commands.Cog):
                     cursor = conn.cursor()
 
                     cursor.execute(
-                        "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                        "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                         (user_id_str,)
                     )
                     row = cursor.fetchone()
@@ -422,8 +461,13 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][str(temp_channel.id)] = True
 
                     cursor.execute(
+<<<<<<< HEAD
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
+                        (json.dumps(db_data), user_id_str)
+=======
                         "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                     )
                     conn.commit()
 
@@ -448,7 +492,7 @@ class TempVoice(commands.Cog):
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "SELECT tmpvcsettings FROM users WHERE user_id = ?",
+                    "SELECT tmpvcsettings FROM tempvoice_setups WHERE user_id = ?",
                     (user_id_str,)
                 )
                 row = cursor.fetchone()
@@ -471,8 +515,13 @@ class TempVoice(commands.Cog):
                     db_data[guild_id][channel_id] = new_value
 
                     cursor.execute(
+<<<<<<< HEAD
+                        "UPDATE tempvoice_setups SET tmpvcsettings = ? WHERE user_id = ?",
+                        (json.dumps(db_data), user_id_str)
+=======
                         "INSERT OR REPLACE INTO users (user_id, tmpvcsettings) VALUES (?, ?)",
                         (user_id_str, json.dumps(db_data))
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                     )
                     conn.commit()
 
@@ -499,6 +548,11 @@ class TempVoice(commands.Cog):
                 channel_id_str in self.temp_channels[guild_id_str])
     
     async def check_temp_channel_empty(self, channel):
+<<<<<<< HEAD
+        """Check if a temp channel is empty and delete it if so"""
+        # Prevent multiple deletion attempts for the same channel
+=======
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
         channel_id_str = str(channel.id)
         if channel_id_str in self._pending_deletions:
             return
@@ -506,37 +560,63 @@ class TempVoice(commands.Cog):
         self._pending_deletions.add(channel_id_str)
         
         try:
+<<<<<<< HEAD
+            # Wait for Discord to update member list
+            await asyncio.sleep(2)
+            
+            # Get fresh channel reference
+            fresh_channel = channel.guild.get_channel(channel.id)
+            if not fresh_channel:
+                # Channel was already deleted
+                return
+            
+            # Check if the channel is still a temp channel
+=======
             await asyncio.sleep(2)
             
             fresh_channel = channel.guild.get_channel(channel.id)
             if not fresh_channel:
                 return
             
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
             guild_id_str = str(channel.guild.id)
             if (guild_id_str not in self.temp_channels or 
                 channel_id_str not in self.temp_channels[guild_id_str]):
                 return
             
+<<<<<<< HEAD
+            # Check if channel is empty (excluding bots)
+=======
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
             human_members = [m for m in fresh_channel.members if not m.bot]
             
             if len(human_members) == 0:
                 try:
                     await self._update_tmpvc_permissions(fresh_channel)
                     await fresh_channel.delete(reason="Temporary voice channel empty")
+<<<<<<< HEAD
+=======
                     
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                     if guild_id_str in self.temp_channels:
                         if channel_id_str in self.temp_channels[guild_id_str]:
                             del self.temp_channels[guild_id_str][channel_id_str]
                         if not self.temp_channels[guild_id_str]:
                             del self.temp_channels[guild_id_str]
+<<<<<<< HEAD
+=======
                             
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
                 except discord.NotFound:
                     pass
                 except Exception as e:
                     print(f"Error deleting temp channel {channel_id_str}: {e}")
         finally:
             self._pending_deletions.discard(channel_id_str)
+<<<<<<< HEAD
+=======
             
+>>>>>>> 0620bd623c39a00ff099eb77d5dc478e51a6558c
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
         if isinstance(channel, discord.VoiceChannel):
@@ -550,7 +630,6 @@ class TempVoice(commands.Cog):
                         del self.temp_channels[guild_id_str]
                     except KeyError:
                         pass
-
 async def setup(bot):
     await bot.add_cog(TempVoice(bot))
     await bot.tree.sync()
