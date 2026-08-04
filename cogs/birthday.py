@@ -2,7 +2,6 @@ import discord
 import datetime
 import sqlite3
 from discord.ext import commands
-from discord import app_commands
 from zoneinfo import ZoneInfo as zi
 
 import bot
@@ -26,13 +25,15 @@ class Birthday(commands.Cog):
             except Exception as e:
                 await ctx.send(f"An error occurred while setting your birthday: {e}")
 
-            
+        @commands.hybrid_command(name="timezones", description="List available timezones")
+        async def timezones(self, ctx: commands.Context):
+            """List available timezones"""
+            timezones = sorted(zi.available_timezones())
+            await ctx.send(f"Available timezones:\n{', '.join(timezones)}")
 
 
-            
-                
 
-            
+
 
 
 
