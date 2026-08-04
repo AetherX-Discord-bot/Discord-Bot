@@ -86,7 +86,29 @@ class Birthday(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = sqlite3.connect('AetherX.db')
+        self.init_db()
         self.check_birthdays.start()
+
+    def init_db(self):
+        cursor = self.db.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS birthdays (
+                user_id INTEGER PRIMARY KEY,
+                birthday TEXT NOT NULL,
+                timezone TEXT NOT NULL,
+                send_message INTEGER DEFAULT 1,
+                last_announced_year INTEGER DEFAULT 0
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS birthday_conf (
+                guild_id INTEGER PRIMARY KEY,
+                channel_id INTEGER NOT NULL,
+                message TEXT,
+                role_id INTEGER
+            )
+        """)
+        self.db.commit()
 
     def cog_unload(self):
         self.check_birthdays.cancel()
@@ -94,23 +116,27 @@ class Birthday(commands.Cog):
 
     @tasks.loop(time=datetime.time(hour=0, minute=0, second=0))
     async def check_birthdays(self):
-        """Check for birthdays daily at midnight"""
+        """Check for birthdays daily at midnight UTC"""
         cursor = self.db.cursor()
         
-        today = datetime.datetime.now().strftime("%m/%d")
-        
-        cursor.execute("SELECT user_id, birthday, timezone FROM birthdays")
+        cursor.execute("SELECT user_id, birthday, timezone, send_message, last_announced_year FROM birthdays WHERE send_message = 1")
         all_users = cursor.fetchall()
         
+        current_year = datetime.datetime.now().year
         birthday_users = {}
-        for user_id, birthday, timezone in all_users:
+        
+        for user_id, birthday, timezone, send_message, last_announced_year in all_users:
             try:
+                user_tz = zi.ZoneInfo(timezone)
+                now = datetime.datetime.now(user_tz)
+                today_in_user_tz = now.strftime("%m/%d")
+                
                 birthday_date = datetime.datetime.strptime(birthday, "%m/%d/%Y")
                 birthday_month_day = birthday_date.strftime("%m/%d")
                 
-                if birthday_month_day == today:
+                if birthday_month_day == today_in_user_tz and last_announced_year != current_year:
                     birthday_users[user_id] = birthday
-            except ValueError:
+            except (ValueError, KeyError):
                 continue
         
         if not birthday_users:
@@ -129,10 +155,13 @@ class Birthday(commands.Cog):
                 continue
             
             mentions = []
+            announced_users = []
+            
             for user_id in birthday_users.keys():
                 user = guild.get_member(user_id)
                 if user:
                     mentions.append(user.mention)
+                    announced_users.append(user_id)
             
             if not mentions:
                 continue
@@ -151,6 +180,14 @@ class Birthday(commands.Cog):
             
             try:
                 await channel.send(message_text)
+                
+                for user_id in announced_users:
+                    cursor.execute(
+                        "UPDATE birthdays SET last_announced_year = ? WHERE user_id = ?",
+                        (current_year, user_id)
+                    )
+                self.db.commit()
+                
             except Exception as e:
                 print(f"Failed to send birthday message in guild {guild_id}: {e}")
 
@@ -174,11 +211,38 @@ class Birthday(commands.Cog):
         
         try:
             cursor = self.db.cursor()
-            cursor.execute("INSERT OR REPLACE INTO birthdays (user_id, birthday, timezone) VALUES (?, ?, ?)", (ctx.author.id, date, timezone))
+            cursor.execute(
+                "INSERT OR REPLACE INTO birthdays (user_id, birthday, timezone, send_message, last_announced_year) VALUES (?, ?, ?, 1, 0)", 
+                (ctx.author.id, date, timezone)
+            )
             self.db.commit()
             await ctx.send(f"✅ Your birthday has been set to {date} in timezone {timezone}.")
         except Exception as e:
             await ctx.send(f"❌ An error occurred while setting your birthday: {e}")
+
+    @commands.hybrid_command(name="birthday_toggle", description="Toggle birthday announcements for yourself")
+    async def birthday_toggle(self, ctx: commands.Context):
+        """Toggle whether you receive birthday announcements"""
+        cursor = self.db.cursor()
+        
+        cursor.execute("SELECT send_message FROM birthdays WHERE user_id = ?", (ctx.author.id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            await ctx.send("❌ You haven't set your birthday yet! Use `/birthday` first.")
+            return
+        
+        current_status = result[0]
+        new_status = 0 if current_status == 1 else 1
+        
+        cursor.execute(
+            "UPDATE birthdays SET send_message = ? WHERE user_id = ?",
+            (new_status, ctx.author.id)
+        )
+        self.db.commit()
+        
+        status_text = "enabled" if new_status == 1 else "disabled"
+        await ctx.send(f"✅ Birthday announcements have been {status_text} for you.")
 
     @commands.hybrid_command(name="timezones", description="List available timezones")
     async def timezones(self, ctx: commands.Context):
