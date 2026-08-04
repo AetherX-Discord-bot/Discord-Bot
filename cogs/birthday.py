@@ -1,9 +1,10 @@
 import discord
 import datetime
 import sqlite3
+import zoneinfo as zi
 from typing import Optional
 from discord.ext import commands
-from zoneinfo import ZoneInfo as zi
+
 
 
 
