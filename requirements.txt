@@ -31,3 +31,4 @@ wadllib
 webcolors
 yarl
 yt-dlp
+discord-vr @ git+https://github.com/Orstando/discord_vr/
