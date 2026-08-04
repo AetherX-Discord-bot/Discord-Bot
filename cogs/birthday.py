@@ -2,8 +2,9 @@ import discord
 import datetime
 import sqlite3
 import zoneinfo as zi
+import asyncio
 from typing import Optional
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 
 
@@ -25,7 +26,6 @@ class TimezonePaginator(discord.ui.View):
         embed.set_footer(
             text=f"Page {self.current_page + 1}/{self.total_pages} • {sum(len(page) for page in self.pages)} total timezones"
         )
-        
         
         self.children[0].disabled = self.current_page == 0  
         self.children[1].disabled = self.current_page == 0  
@@ -86,30 +86,104 @@ class Birthday(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.db = sqlite3.connect('AetherX.db')
+        self.check_birthdays.start()
+
+    def cog_unload(self):
+        self.check_birthdays.cancel()
+        self.db.close()
+
+    @tasks.loop(time=datetime.time(hour=0, minute=0, second=0))
+    async def check_birthdays(self):
+        """Check for birthdays daily at midnight"""
+        cursor = self.db.cursor()
         
+        today = datetime.datetime.now().strftime("%m/%d")
+        
+        cursor.execute("SELECT user_id, birthday, timezone FROM birthdays")
+        all_users = cursor.fetchall()
+        
+        birthday_users = {}
+        for user_id, birthday, timezone in all_users:
+            try:
+                birthday_date = datetime.datetime.strptime(birthday, "%m/%d/%Y")
+                birthday_month_day = birthday_date.strftime("%m/%d")
+                
+                if birthday_month_day == today:
+                    birthday_users[user_id] = birthday
+            except ValueError:
+                continue
+        
+        if not birthday_users:
+            return
+        
+        cursor.execute("SELECT guild_id, channel_id, message, role_id FROM birthday_conf")
+        guild_configs = cursor.fetchall()
+        
+        for guild_id, channel_id, custom_message, role_id in guild_configs:
+            guild = self.bot.get_guild(guild_id)
+            if not guild:
+                continue
+                
+            channel = guild.get_channel(channel_id)
+            if not channel:
+                continue
+            
+            mentions = []
+            for user_id in birthday_users.keys():
+                user = guild.get_member(user_id)
+                if user:
+                    mentions.append(user.mention)
+            
+            if not mentions:
+                continue
+            
+            mention_text = " ".join(mentions)
+            
+            if custom_message:
+                message_text = custom_message.replace("{mention}", mention_text)
+            else:
+                message_text = f"🎉 Happy Birthday {mention_text}! 🎉"
+            
+            if role_id:
+                role = guild.get_role(role_id)
+                if role:
+                    message_text = f"{role.mention} {message_text}"
+            
+            try:
+                await channel.send(message_text)
+            except Exception as e:
+                print(f"Failed to send birthday message in guild {guild_id}: {e}")
+
+    @check_birthdays.before_loop
+    async def before_check_birthdays(self):
+        await self.bot.wait_until_ready()
 
     @commands.hybrid_command(name="birthday", description="Set your birthday")
-    @app_commands.describe(date="(mm\dd\yyyy)", timezone="timezone you are in")
+    @app_commands.describe(date="(mm/dd/yyyy)", timezone="timezone you are in")
     async def birthday(self, ctx: commands.Context, date: str, timezone: str = "UTC"):
         """Set your birthday"""
+        try:
+            datetime.datetime.strptime(date, "%m/%d/%Y")
+        except ValueError:
+            await ctx.send("❌ Invalid date format. Please use mm/dd/yyyy")
+            return
+        
+        if timezone not in zi.available_timezones():
+            await ctx.send("❌ Invalid timezone. Use `/timezones` to see available timezones.")
+            return
+        
         try:
             cursor = self.db.cursor()
             cursor.execute("INSERT OR REPLACE INTO birthdays (user_id, birthday, timezone) VALUES (?, ?, ?)", (ctx.author.id, date, timezone))
             self.db.commit()
-            await ctx.send(f"Your birthday has been set to {date} in timezone {timezone}.")
-            
+            await ctx.send(f"✅ Your birthday has been set to {date} in timezone {timezone}.")
         except Exception as e:
-            await ctx.send(f"An error occurred while setting your birthday: {e}")
-
-
+            await ctx.send(f"❌ An error occurred while setting your birthday: {e}")
 
     @commands.hybrid_command(name="timezones", description="List available timezones")
     async def timezones(self, ctx: commands.Context):
         """List available timezones with pagination buttons"""
-    
-    
         all_timezones = sorted(zi.available_timezones())
-    
         
         items_per_page = 30
         pages = []
@@ -120,7 +194,6 @@ class Birthday(commands.Cog):
             await ctx.send("❌ No timezones found.")
             return
     
-        
         embed = discord.Embed(
             title="🌍 Available Timezones",
             description=f"```\n{', '.join(pages[0])}\n```",
@@ -130,27 +203,24 @@ class Birthday(commands.Cog):
             text=f"Page 1/{len(pages)} • {len(all_timezones)} total timezones"
         )
     
-    
         view = TimezonePaginator(pages, ctx.author)
         message = await ctx.send(embed=embed, view=view)
         view.message = message
 
     @commands.hybrid_command(name="set_birthday_channel", description="Set the channel for birthday announcements")
     @commands.has_permissions(administrator=True)
-    async def set_birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel,message: str, role: Optional[discord.Role]): 
+    async def set_birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel, message: str = None, role: Optional[discord.Role] = None): 
         """Set the channel for birthday announcements"""
         try:
             cursor = self.db.cursor()
-            cursor.execute("INSERT OR REPLACE INTO birthday_conf (guild_id, channel_id, message, role_id) VALUES (?, ?, ?)", (ctx.guild.id, channel.id, message, role.id if role else None))
+            cursor.execute(
+                "INSERT OR REPLACE INTO birthday_conf (guild_id, channel_id, message, role_id) VALUES (?, ?, ?, ?)", 
+                (ctx.guild.id, channel.id, message, role.id if role else None)
+            )
             self.db.commit()
-            await ctx.send(f"Birthday announcements will be sent to {channel.mention}.")
-            self.db.close()
+            await ctx.send(f"✅ Birthday announcements will be sent to {channel.mention}.")
         except Exception as e:
-            await ctx.send(f"An error occurred while setting the birthday channel: {e}")
-
-
-
-
+            await ctx.send(f"❌ An error occurred while setting the birthday channel: {e}")
 
 async def setup(bot):
     await bot.add_cog(Birthday(bot))
