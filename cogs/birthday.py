@@ -15,7 +15,7 @@ class TimezonePaginator(discord.ui.View):
         self.current_page = 0
         self.total_pages = len(pages)
         self.author = author
-        self.message = None
+        self.message_obj: Optional[discord.Message] = None
     
     async def update_embed(self, interaction):
         embed = discord.Embed(
@@ -27,10 +27,15 @@ class TimezonePaginator(discord.ui.View):
             text=f"Page {self.current_page + 1}/{self.total_pages} • {sum(len(page) for page in self.pages)} total timezones"
         )
         
-        self.children[0].disabled = self.current_page == 0  
-        self.children[1].disabled = self.current_page == 0  
-        self.children[2].disabled = self.current_page == self.total_pages - 1  
-        self.children[3].disabled = self.current_page == self.total_pages - 1  
+        for i, item in enumerate(self.children):
+            if not isinstance(item, discord.ui.Button):
+                continue
+            if i in (0, 1):
+                item.disabled = (self.current_page == 0)
+            elif i in (2, 3):
+                item.disabled = (self.current_page == self.total_pages - 1)
+            else:
+                item.disabled = False
         
         await interaction.response.edit_message(embed=embed, view=self)
 
@@ -73,14 +78,20 @@ class TimezonePaginator(discord.ui.View):
         if interaction.user != self.author:
             await interaction.response.send_message("❌ You can't control this pagination!", ephemeral=True)
             return
-        await interaction.message.delete()
+        msg = getattr(interaction, 'message', None)
+        if msg is not None:
+            try:
+                await msg.delete()
+            except Exception:
+                pass
         self.stop()
 
     async def on_timeout(self):
         for item in self.children:
-            item.disabled = True
-        if self.message:
-            await self.message.edit(view=self)
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+        if isinstance(self.message_obj, discord.Message):
+            await self.message_obj.edit(view=self)
 
 class Birthday(commands.Cog):
     def __init__(self, bot):
@@ -110,7 +121,7 @@ class Birthday(commands.Cog):
         """)
         self.db.commit()
 
-    def cog_unload(self):
+    async def cog_unload(self):
         self.check_birthdays.cancel()
         self.db.close()
 
@@ -269,17 +280,22 @@ class Birthday(commands.Cog):
     
         view = TimezonePaginator(pages, ctx.author)
         message = await ctx.send(embed=embed, view=view)
-        view.message = message
+        view.message_obj = message
 
     @commands.hybrid_command(name="set_birthday_channel", description="Set the channel for birthday announcements")
     @commands.has_permissions(administrator=True)
-    async def set_birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel, message: str = None, role: Optional[discord.Role] = None): 
+    async def set_birthday_channel(self, ctx: commands.Context, channel: discord.TextChannel, message: Optional[str] = None, role: Optional[discord.Role] = None): 
         """Set the channel for birthday announcements"""
         try:
+            if ctx.guild is None:
+                await ctx.send("❌ This command must be used in a server.")
+                return
+
             cursor = self.db.cursor()
+            role_id = role.id if role is not None else None
             cursor.execute(
-                "INSERT OR REPLACE INTO birthday_conf (guild_id, channel_id, message, role_id) VALUES (?, ?, ?, ?)", 
-                (ctx.guild.id, channel.id, message, role.id if role else None)
+                "INSERT OR REPLACE INTO birthday_conf (guild_id, channel_id, message, role_id) VALUES (?, ?, ?, ?)",
+                (ctx.guild.id, channel.id, message, role_id)
             )
             self.db.commit()
             await ctx.send(f"✅ Birthday announcements will be sent to {channel.mention}.")

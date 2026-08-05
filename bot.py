@@ -1,5 +1,5 @@
 import os
-import discord_vr
+import discord_vr # type:ignore
 import discord
 from discord.ext import commands
 import datetime
