@@ -510,5 +510,4 @@ class NukeCog(commands.Cog, name="Nuke"):
             await ctx.send(embed=embed, delete_after=error.retry_after)
 
 async def setup(bot):
-    """Load the Nuke cog"""
     await bot.add_cog(NukeCog(bot))
