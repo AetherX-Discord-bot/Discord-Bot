@@ -212,35 +212,53 @@ class TicketOwnerView(discord.ui.View):
         self.add_item(CloseTicketButton())
 
 
+# ===== UPDATED CLOSE TICKET BUTTON WITH 5‑SECOND DELAY =====
 class CloseTicketButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger)
 
     async def callback(self, interaction: discord.Interaction):
+        # First, defer the interaction so we can take our time
+        await interaction.response.defer(ephemeral=True)
+
+        # Wait 5 seconds before closing
+        await asyncio.sleep(5)
+
+        # After delay, re‑fetch the channel and ticket record (they may have changed)
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("This button can only be used in a ticket channel.", ephemeral=True)
+            await interaction.followup.send("This button can only be used in a ticket channel.", ephemeral=True)
+            return
+
+        # Re‑fetch the guild and member context
+        guild = interaction.guild
+        if guild is None:
+            await interaction.followup.send("Could not determine guild context.", ephemeral=True)
             return
 
         member = interaction.user
-        if member is None or interaction.guild is None:
-            await interaction.response.send_message("Could not determine user context.", ephemeral=True)
-            return
-
-        guild_member = interaction.guild.get_member(member.id)
+        guild_member = guild.get_member(member.id)
         if guild_member is None:
-            await interaction.response.send_message("Could not retrieve member information.", ephemeral=True)
+            await interaction.followup.send("Could not retrieve member information.", ephemeral=True)
             return
 
+        # Check if the ticket still exists and is open
         ticket = get_ticket_by_channel(channel.id)
         if not ticket:
-            await interaction.response.send_message("No ticket record was found for this channel.", ephemeral=True)
+            await interaction.followup.send("No ticket record was found for this channel.", ephemeral=True)
             return
 
+        # If the ticket is already closed or deleted, notify
+        if ticket["status"] != "open":
+            await interaction.followup.send("This ticket is no longer open.", ephemeral=True)
+            return
+
+        # Permission check
         if member.id != ticket["user_id"] and not guild_member.guild_permissions.manage_channels:
-            await interaction.response.send_message("Only the ticket creator or a moderator can close this ticket.", ephemeral=True)
+            await interaction.followup.send("Only the ticket creator or a moderator can close this ticket.", ephemeral=True)
             return
 
+        # Proceed with closing
         try:
             await channel.edit(name=f"closed-{channel.name}")
         except discord.Forbidden:
@@ -265,7 +283,7 @@ class CloseTicketButton(discord.ui.Button):
         except discord.Forbidden:
             pass
 
-        await interaction.response.send_message("Ticket closed successfully.", ephemeral=True)
+        await interaction.followup.send("Ticket closed successfully.", ephemeral=True)
 
 
 class AdminTicketActions(discord.ui.View):
@@ -290,6 +308,7 @@ class AdminTicketActions(discord.ui.View):
             ephemeral=True,
         )
 
+
 class DeleteTicketConfirm(discord.ui.View):
     def __init__(self, channel_id: int):
         super().__init__(timeout=60)
@@ -310,6 +329,7 @@ class DeleteTicketConfirm(discord.ui.View):
         if channel is None:
             await interaction.response.send_message("This ticket channel was already deleted.", ephemeral=True)
             return
+
         await interaction.response.defer(ephemeral=True)
 
         try:
@@ -319,6 +339,7 @@ class DeleteTicketConfirm(discord.ui.View):
             return
 
         update_ticket_status(self.channel_id, "deleted", interaction.user.id)
+
         try:
             await interaction.followup.send("Ticket channel deleted.", ephemeral=True)
         except discord.NotFound:
