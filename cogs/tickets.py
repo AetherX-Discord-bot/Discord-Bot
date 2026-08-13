@@ -278,7 +278,8 @@ class CloseTicketButton(discord.ui.Button):
                     title="Ticket Closed",
                     description=f"This ticket has been closed by {member.mention}. The ticket channel has been renamed and the ticket creator was removed from access.",
                     color=discord.Color.orange(),
-                )
+                ),
+                view=AdminTicketActions(channel.id)
             )
         except discord.Forbidden:
             pass
