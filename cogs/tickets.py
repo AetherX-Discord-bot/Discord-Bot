@@ -64,24 +64,25 @@ def get_setting(guild_id: int, key: str):
     return row[key]
 
 
-def save_setting(guild_id: int, setup_channel_id: int, category_id: int, admin_channel_id: int, embed_title: str, embed_description: str, button_label: str, embed_color: int):
+def save_setting(guild_id: int, setup_channel_id: int, category_id: int, admin_channel_id: int, staff_role_id: int, embed_title: str, embed_description: str, button_label: str, embed_color: int):
     with get_db_connection() as conn:
         conn.execute(
             """
             INSERT INTO ticket_settings (
-                guild_id, setup_channel_id, category_id, admin_channel_id,
+                guild_id, setup_channel_id, category_id, admin_channel_id, staff_role_id,
                 embed_title, embed_description, button_label, embed_color
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(guild_id) DO UPDATE SET
                 setup_channel_id=excluded.setup_channel_id,
                 category_id=excluded.category_id,
                 admin_channel_id=excluded.admin_channel_id,
+                staff_role_id=excluded.staff_role_id,
                 embed_title=excluded.embed_title,
                 embed_description=excluded.embed_description,
                 button_label=excluded.button_label,
                 embed_color=excluded.embed_color
             """,
-            (guild_id, setup_channel_id, category_id, admin_channel_id, embed_title, embed_description, button_label, embed_color),
+            (guild_id, setup_channel_id, category_id, admin_channel_id, staff_role_id, embed_title, embed_description, button_label, embed_color),
         )
         conn.commit()
 
@@ -98,7 +99,7 @@ def update_ticket_status(channel_id: int, status: str, closed_by: Optional[int] 
     with get_db_connection() as conn:
         conn.execute(
             "UPDATE tickets SET status = ?, closed_by = ?, closed_at = ? WHERE channel_id = ?",
-            (status, closed_by, datetime.utcnow().isoformat(), channel_id),
+            (status, closed_by, datetime.now(timezone.utc).isoformat(), channel_id),
         )
         conn.commit()
 
@@ -419,6 +420,7 @@ class TicketCog(commands.Cog):
             channel.id,
             category.id,
             admin_channel.id,
+            0,
             title,
             description,
             button_label,
