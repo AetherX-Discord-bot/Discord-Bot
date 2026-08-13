@@ -290,7 +290,6 @@ class AdminTicketActions(discord.ui.View):
             ephemeral=True,
         )
 
-
 class DeleteTicketConfirm(discord.ui.View):
     def __init__(self, channel_id: int):
         super().__init__(timeout=60)
@@ -311,15 +310,19 @@ class DeleteTicketConfirm(discord.ui.View):
         if channel is None:
             await interaction.response.send_message("This ticket channel was already deleted.", ephemeral=True)
             return
+        await interaction.response.defer(ephemeral=True)
 
         try:
             await channel.delete(reason=f"Ticket deleted by {interaction.user}")
         except discord.Forbidden:
-            await interaction.response.send_message("I do not have permission to delete this ticket channel.", ephemeral=True)
+            await interaction.followup.send("I do not have permission to delete this ticket channel.", ephemeral=True)
             return
 
         update_ticket_status(self.channel_id, "deleted", interaction.user.id)
-        await interaction.response.send_message("Ticket channel deleted.", ephemeral=True)
+        try:
+            await interaction.followup.send("Ticket channel deleted.", ephemeral=True)
+        except discord.NotFound:
+            pass
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
