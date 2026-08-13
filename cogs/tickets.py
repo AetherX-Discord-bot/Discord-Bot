@@ -25,6 +25,7 @@ def init_db():
                 setup_channel_id INTEGER,
                 category_id INTEGER,
                 admin_channel_id INTEGER,
+                staff_role_id INTEGER,
                 embed_title TEXT,
                 embed_description TEXT,
                 button_label TEXT,
