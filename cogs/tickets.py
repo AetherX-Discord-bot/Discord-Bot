@@ -24,7 +24,6 @@ def init_db():
                 guild_id INTEGER PRIMARY KEY,
                 setup_channel_id INTEGER,
                 category_id INTEGER,
-                admin_channel_id INTEGER,
                 staff_role_id INTEGER,
                 embed_title TEXT,
                 embed_description TEXT,
@@ -64,25 +63,24 @@ def get_setting(guild_id: int, key: str):
     return row[key]
 
 
-def save_setting(guild_id: int, setup_channel_id: int, category_id: int, admin_channel_id: int, staff_role_id: int, embed_title: str, embed_description: str, button_label: str, embed_color: int):
+def save_setting(guild_id: int, setup_channel_id: int, category_id: int, staff_role_id: int, embed_title: str, embed_description: str, button_label: str, embed_color: int):
     with get_db_connection() as conn:
         conn.execute(
             """
             INSERT INTO ticket_settings (
-                guild_id, setup_channel_id, category_id, admin_channel_id, staff_role_id,
+                guild_id, setup_channel_id, category_id, staff_role_id,
                 embed_title, embed_description, button_label, embed_color
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(guild_id) DO UPDATE SET
                 setup_channel_id=excluded.setup_channel_id,
                 category_id=excluded.category_id,
-                admin_channel_id=excluded.admin_channel_id,
                 staff_role_id=excluded.staff_role_id,
                 embed_title=excluded.embed_title,
                 embed_description=excluded.embed_description,
                 button_label=excluded.button_label,
                 embed_color=excluded.embed_color
             """,
-            (guild_id, setup_channel_id, category_id, admin_channel_id, staff_role_id, embed_title, embed_description, button_label, embed_color),
+            (guild_id, setup_channel_id, category_id, staff_role_id, embed_title, embed_description, button_label, embed_color),
         )
         conn.commit()
 
@@ -114,19 +112,6 @@ def create_ticket_record(guild_id: int, user_id: int, channel_id: int, category_
             (guild_id, user_id, channel_id, category_id, reason, datetime.utcnow().isoformat()),
         )
         conn.commit()
-
-
-def get_transcript_text(channel: discord.TextChannel) -> str:
-    messages = []
-    async def gather():
-        async for message in channel.history(oldest_first=True, limit=None):
-            timestamp = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            author = message.author.display_name
-            content = message.content or "[No text content]"
-            messages.append(f"[{timestamp}] {author}: {content}")
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(gather())
-    return "\n".join(messages) if messages else "No messages in this ticket channel."
 
 
 class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
@@ -188,21 +173,15 @@ class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
         embed.add_field(name="Status", value="Open", inline=False)
         embed.set_footer(text="Use the button below to close this ticket when you are done.")
 
-        await ticket_channel.send(f"{interaction.user.mention}", embed=embed, view=TicketOwnerView())
+        staff_role = guild.get_role(row["staff_role_id"]) if row["staff_role_id"] else None
+        ticket_message = f"{interaction.user.mention}"
+        if staff_role:
+            ticket_message = f"{staff_role.mention} {interaction.user.mention}"
+
+        await ticket_channel.send(ticket_message, embed=embed, view=TicketOwnerView())
         create_ticket_record(guild.id, interaction.user.id, ticket_channel.id, category.id if category else None, self.reason.value)
 
         await interaction.response.send_message(f"Your ticket has been created: {ticket_channel.mention}", ephemeral=True)
-
-        admin_channel = guild.get_channel(row["admin_channel_id"]) if row["admin_channel_id"] else None
-        if admin_channel and isinstance(admin_channel, discord.TextChannel):
-            admin_embed = discord.Embed(
-                title="New Ticket Created",
-                description=f"A new ticket was opened by {interaction.user.mention}.",
-                color=discord.Color.blurple(),
-            )
-            admin_embed.add_field(name="Reason", value=self.reason.value, inline=False)
-            admin_embed.add_field(name="Channel", value=ticket_channel.mention, inline=False)
-            await admin_channel.send(embed=admin_embed, view=AdminTicketActions(ticket_channel.id))
 
     def get_settings(self, guild_id: int):
         with get_db_connection() as conn:
@@ -285,19 +264,6 @@ class CloseTicketButton(discord.ui.Button):
         except discord.Forbidden:
             pass
 
-        row = get_settings_for_guild(interaction.guild.id)
-        if row and row["admin_channel_id"]:
-            admin_channel = interaction.guild.get_channel(row["admin_channel_id"])
-            if isinstance(admin_channel, discord.TextChannel):
-                admin_embed = discord.Embed(
-                    title="Ticket Closed",
-                    description=f"Ticket channel {channel.mention} has been closed.",
-                    color=discord.Color.orange(),
-                )
-                admin_embed.add_field(name="Reason", value=ticket["reason"], inline=False)
-                admin_embed.add_field(name="Closed By", value=member.mention, inline=False)
-                await admin_channel.send(embed=admin_embed, view=AdminTicketActions(channel.id))
-
         await interaction.response.send_message("Ticket closed successfully.", ephemeral=True)
 
 
@@ -305,26 +271,6 @@ class AdminTicketActions(discord.ui.View):
     def __init__(self, channel_id: int):
         super().__init__(timeout=None)
         self.channel_id = channel_id
-
-    @discord.ui.button(label="Get Transcript", style=discord.ButtonStyle.secondary)
-    async def transcript_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not interaction.guild:
-            await interaction.response.send_message("This command can only be used in a guild.", ephemeral=True)
-            return
-
-        member = interaction.guild.get_member(interaction.user.id)
-        if not member or (not member.guild_permissions.manage_channels and not member.guild_permissions.administrator):
-            await interaction.response.send_message("You do not have permission to access the transcript.", ephemeral=True)
-            return
-
-        channel = interaction.guild.get_channel(self.channel_id)
-        if not isinstance(channel, discord.TextChannel):
-            await interaction.response.send_message("This ticket channel could not be found.", ephemeral=True)
-            return
-
-        transcript = get_transcript_text(channel)
-        file = discord.File(fp=__import__('io').BytesIO(transcript.encode("utf-8")), filename=f"ticket-{channel.id}-transcript.txt")
-        await interaction.response.send_message(file=file, ephemeral=True)
 
     @discord.ui.button(label="Delete Ticket", style=discord.ButtonStyle.danger)
     async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -396,20 +342,20 @@ class TicketCog(commands.Cog):
     @app_commands.describe(
         channel="Channel to send the ticket embed in",
         category="Category where temporary ticket channels are created",
-        admin_channel="Channel where admin ticket actions are sent",
         title="Ticket embed title",
         description="Ticket embed description",
         button_label="Label for the ticket button",
+        staff_role="Optional staff role to ping when a ticket is created",
     )
     async def setup_tickets(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
         category: discord.CategoryChannel,
-        admin_channel: discord.TextChannel,
         title: str,
         description: str,
         button_label: str = "Open Ticket",
+        staff_role: Optional[discord.Role] = None,
     ):
         if not interaction.guild or not interaction.permissions.manage_channels:
             await interaction.response.send_message("You need Manage Channels to configure tickets.", ephemeral=True)
@@ -419,8 +365,7 @@ class TicketCog(commands.Cog):
             interaction.guild.id,
             channel.id,
             category.id,
-            admin_channel.id,
-            0,
+            staff_role.id if staff_role else 0,
             title,
             description,
             button_label,
