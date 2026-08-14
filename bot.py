@@ -120,7 +120,7 @@ bot = AetherXBot(command_prefix="$", intents=intents)
 @bot.event
 async def on_ready():
     animator = BootAnimator()
-    await bot.change_presence(activity=discord.Game(name="Version 0.2.0 Alpha out now | $help"))
+    await bot.change_presence(activity=discord.Game(name="Version 0.2.5 Alpha out now | $help"))
     database = sqlite3.connect("AetherX.db")
     cursor = database.cursor()
     

@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-version = "0.2.0-alpha"
+version = "0.2.5-alpha"
 class Updates(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -10,7 +10,7 @@ class Updates(commands.Cog):
     @commands.hybrid_command(name="updates", description="View the latest updates and changes to AetherX.")
     async def updates(self, ctx: commands.Context):
         embed = discord.Embed(title="AetherX Update Log", description=f"Version {version} - Latest Updates and Changes", color=discord.Color.blue())
-        embed.add_field(name="New Features", value="- Added music playback supporting YouTube, SoundCloud, Bandcamp, Twitch, and Vineo", inline=False)
+        embed.add_field(name="New Features", value="- Added honeypot integration", inline=False)
         embed.add_field(name="Bug Fixes", value="- No new bug fixes at this time", inline=False)
         await ctx.send(embed=embed)
 
