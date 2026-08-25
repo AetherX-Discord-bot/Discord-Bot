@@ -218,7 +218,6 @@ class CloseTicketButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-
         await asyncio.sleep(5)
 
         channel = interaction.channel
@@ -333,7 +332,7 @@ class DeleteTicketConfirm(discord.ui.View):
 
         try:
             await interaction.followup.send("Ticket channel deleted.", ephemeral=True)
-        except discord.NotFound:
+        except (discord.NotFound, discord.HTTPException):
             pass
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
