@@ -212,25 +212,20 @@ class TicketOwnerView(discord.ui.View):
         self.add_item(CloseTicketButton())
 
 
-# ===== UPDATED CLOSE TICKET BUTTON WITH 5‑SECOND DELAY =====
 class CloseTicketButton(discord.ui.Button):
     def __init__(self):
         super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger)
 
     async def callback(self, interaction: discord.Interaction):
-        # First, defer the interaction so we can take our time
         await interaction.response.defer(ephemeral=True)
 
-        # Wait 5 seconds before closing
         await asyncio.sleep(5)
 
-        # After delay, re‑fetch the channel and ticket record (they may have changed)
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
             await interaction.followup.send("This button can only be used in a ticket channel.", ephemeral=True)
             return
 
-        # Re‑fetch the guild and member context
         guild = interaction.guild
         if guild is None:
             await interaction.followup.send("Could not determine guild context.", ephemeral=True)
@@ -242,23 +237,19 @@ class CloseTicketButton(discord.ui.Button):
             await interaction.followup.send("Could not retrieve member information.", ephemeral=True)
             return
 
-        # Check if the ticket still exists and is open
         ticket = get_ticket_by_channel(channel.id)
         if not ticket:
             await interaction.followup.send("No ticket record was found for this channel.", ephemeral=True)
             return
 
-        # If the ticket is already closed or deleted, notify
         if ticket["status"] != "open":
             await interaction.followup.send("This ticket is no longer open.", ephemeral=True)
             return
 
-        # Permission check
         if member.id != ticket["user_id"] and not guild_member.guild_permissions.manage_channels:
             await interaction.followup.send("Only the ticket creator or a moderator can close this ticket.", ephemeral=True)
             return
 
-        # Proceed with closing
         try:
             await channel.edit(name=f"closed-{channel.name}")
         except discord.Forbidden:
@@ -386,6 +377,8 @@ class TicketCog(commands.Cog):
             await interaction.response.send_message("You need Manage Channels to configure tickets.", ephemeral=True)
             return
 
+        await interaction.response.defer(ephemeral=True)
+
         save_setting(
             interaction.guild.id,
             channel.id,
@@ -402,7 +395,7 @@ class TicketCog(commands.Cog):
         view.add_item(TicketOpenButton(button_label))
 
         await channel.send(embed=embed, view=view)
-        await interaction.response.send_message(f"Ticket setup complete in {channel.mention}.", ephemeral=True)
+        await interaction.followup.send(f"Ticket setup complete in {channel.mention}.", ephemeral=True)
 
 
 async def setup(bot: commands.Bot):
