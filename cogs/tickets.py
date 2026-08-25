@@ -9,8 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "AetherX.db")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(PROJECT_ROOT, "AetherX.db")
 
 
 def get_db_connection() -> sqlite3.Connection:
