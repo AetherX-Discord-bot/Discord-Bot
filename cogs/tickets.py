@@ -1,3 +1,4 @@
+import os
 import asyncio
 import sqlite3
 from datetime import datetime, timezone
@@ -8,7 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 
 
-DB_PATH = "AetherX.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "AetherX.db")
 
 
 def get_db_connection() -> sqlite3.Connection:
