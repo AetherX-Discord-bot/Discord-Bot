@@ -17,7 +17,7 @@ load_dotenv()
 
 GITHUB_TOKEN = os.getenv("AETHERX_GITHUB_TOKEN")
 GITLAB_TOKEN = os.getenv("AETHERX_GITLAB_TOKEN")
-STEAM_API_KEY = os.getenv("AETHERX_STEAM_API_KEY")
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")
 
 # Debug
 if STEAM_API_KEY:
@@ -133,7 +133,7 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return None
 
     async def _fetch_steam_news(self, app_id: str) -> Optional[Dict[str, Any]]:
-        steam_key = STEAM_API_KEY or os.getenv("AETHERX_STEAM_API_KEY")
+        steam_key = STEAM_API_KEY or os.getenv("STEAM_API_KEY")
         if not steam_key:
             print("[UpdateMonitor] Skipping Steam - no API key set.")
             return None
