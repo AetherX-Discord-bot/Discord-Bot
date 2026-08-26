@@ -2,28 +2,43 @@ import os
 import asyncio
 import sqlite3
 import re
+import json
 from typing import cast
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
+from pathlib import Path
 
 import aiohttp
 import discord
 import feedparser
 from discord import app_commands
 from discord.ext import commands, tasks
-from dotenv import load_dotenv
 
-load_dotenv()
+def load_config():
+    """Load API keys from config.json in the root directory."""
+    config_path = Path(__file__).parent.parent / 'config.json'
+    try:
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+            return config
+    except FileNotFoundError:
+        print("[UpdateMonitor] ⚠️ config.json not found. Using default empty config.")
+        return {}
+    except json.JSONDecodeError as e:
+        print(f"[UpdateMonitor] ❌ Error parsing config.json: {e}")
+        return {}
 
-GITHUB_TOKEN = os.getenv("AETHERX_GITHUB_TOKEN")
-GITLAB_TOKEN = os.getenv("AETHERX_GITLAB_TOKEN")
-STEAM_API_KEY = os.getenv("STEAM_API_KEY")
+config = load_config()
 
-# Debug
+GITHUB_TOKEN = config.get("GITHUB_TOKEN", "")
+GITLAB_TOKEN = config.get("GITLAB_TOKEN", "")
+STEAM_API_KEY = config.get("STEAM_API_KEY", "")
+
+# Debug check
 if STEAM_API_KEY:
-    print(f"[DEBUG] STEAM_API_KEY loaded: {STEAM_API_KEY[:5]}... (first 5 chars)")
+    print(f"[UpdateMonitor] ✅ STEAM_API_KEY loaded from config.json: {STEAM_API_KEY[:5]}... (first 5 chars)")
 else:
-    print("[DEBUG] ⚠️ STEAM_API_KEY is EMPTY - check .env file and variable name!")
+    print("[UpdateMonitor] ⚠️ STEAM_API_KEY is EMPTY - check config.json!")
 
 DATABASE_PATH = "AetherX.db"
 SOURCE_TYPES = ["github", "gitlab", "steam", "rss"]
@@ -32,7 +47,7 @@ SOURCE_TYPES = ["github", "gitlab", "steam", "rss"]
 class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
     """
     Monitors GitHub, GitLab, Steam, and RSS feeds for updates.
-    - API keys are loaded from environment variables (.env file).
+    - API keys are loaded from config.json.
     - No keys required (falls back gracefully).
     - Hourly background checks.
     - Auto-creates webhooks or sends as bot messages.
@@ -133,8 +148,7 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return None
 
     async def _fetch_steam_news(self, app_id: str) -> Optional[Dict[str, Any]]:
-        steam_key = STEAM_API_KEY or os.getenv("STEAM_API_KEY")
-        if not steam_key:
+        if not STEAM_API_KEY:
             print("[UpdateMonitor] Skipping Steam - no API key set.")
             return None
 
@@ -143,7 +157,7 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             "appid": app_id,
             "count": 1,
             "format": "json",
-            "key": steam_key
+            "key": STEAM_API_KEY
         }
         try:
             async with self.session.get(url, params=params) as resp:
