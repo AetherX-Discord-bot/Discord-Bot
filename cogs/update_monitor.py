@@ -16,16 +16,24 @@ from discord.ext import commands, tasks
 
 def load_config():
     """Load API keys from config.json in the root directory."""
-    config_path = Path(__file__).parent.parent / 'config.json'
-    try:
-        with open(config_path, 'r') as f:
-            config = json.load(f)
-            return config
-    except FileNotFoundError:
-        print("[UpdateMonitor] ⚠️ config.json not found. Using default empty config.")
+    config_path = Path('config.json')
+    
+    print(f"[UpdateMonitor] Looking for config.json at: {config_path.absolute()}")
+    
+    if not config_path.exists():
+        print("[UpdateMonitor] ❌ config.json does NOT exist!")
         return {}
+    
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            print(f"[UpdateMonitor] ✅ Loaded config. Keys: {list(config.keys())}")
+            return config
     except json.JSONDecodeError as e:
-        print(f"[UpdateMonitor] ❌ Error parsing config.json: {e}")
+        print(f"[UpdateMonitor] ❌ JSON error: {e}")
+        return {}
+    except Exception as e:
+        print(f"[UpdateMonitor] ❌ Unexpected error: {e}")
         return {}
 
 config = load_config()
@@ -36,7 +44,7 @@ STEAM_API_KEY = config.get("STEAM_API_KEY", "")
 
 # Debug check
 if STEAM_API_KEY:
-    print(f"[UpdateMonitor] ✅ STEAM_API_KEY loaded from config.json: {STEAM_API_KEY[:5]}... (first 5 chars)")
+    print(f"[UpdateMonitor] ✅ STEAM_API_KEY loaded: {STEAM_API_KEY[:5]}... (first 5 chars)")
 else:
     print("[UpdateMonitor] ⚠️ STEAM_API_KEY is EMPTY - check config.json!")
 
