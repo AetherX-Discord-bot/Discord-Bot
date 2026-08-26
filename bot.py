@@ -112,15 +112,13 @@ class AetherXBot(commands.Bot):
                                 print(f"Error loading {import_path}: {e}")
 
 
-# ==================== INSTANTIATE BOT ====================
 bot = AetherXBot(command_prefix="$", intents=intents)
 
 
-# ==================== BOT EVENTS ====================
 @bot.event
 async def on_ready():
     animator = BootAnimator()
-    await bot.change_presence(activity=discord.Game(name="Version 0.2.5 Alpha out now | $help"))
+    await bot.change_presence(activity=discord.Game(name="Version 0.3.0 Alpha out now | $help"))
     database = sqlite3.connect("AetherX.db")
     cursor = database.cursor()
     
@@ -142,12 +140,14 @@ async def on_ready():
             print(f"Error during startup step '{text}': {e}")
             raise
 
-    print(f'\n\033[92m[READY]\033[0m Logged in as {bot.user} (ID: {bot.user.id})')  # type: ignore
+    user = bot.user
+    if user is None:
+        raise RuntimeError("Bot user is unavailable after ready event")
+    print(f'\n\033[92m[READY]\033[0m Logged in as {user} (ID: {user.id})')
     print(f'\033[94m[INFO]\033[0m Boot completed in {animator.elapsed_time()}')
     print('\033[94m[INFO]\033[0m ' + '=' * 40)
 
 
-# ==================== RUN BOT ====================
 if __name__ == "__main__":
     print_boot_banner()
     bot.run(TOKEN)
