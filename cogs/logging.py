@@ -146,7 +146,8 @@ def get_log_channel(guild: discord.Guild, config: Dict, event_name: str) -> Opti
     if channel_id is None:
         channel_id = config.get("log_channel_id")
     if channel_id:
-        return guild.get_channel(channel_id)
+        channel = guild.get_channel(channel_id)
+        return channel if isinstance(channel, discord.TextChannel) else None
     return None
 
 class PresetApplyView(discord.ui.View):
@@ -236,6 +237,9 @@ class LogSetupView(discord.ui.View):
             if not config:
                 init_guild(self.guild_id)
                 config = get_config(self.guild_id)
+            if not config:
+                await interaction.edit_original_response(content="❌ Unable to initialize logging configuration.")
+                return
             view = EventToggleView(self.cog, self.guild_id, config)
             embed = discord.Embed(
                 title="Custom Event Toggles",
@@ -402,14 +406,18 @@ class Logging(commands.Cog):
     @app_commands.command(name="log", description="Configure the logging system for this server.")
     @app_commands.default_permissions(manage_guild=True)
     async def log(self, interaction: discord.Interaction):
-        init_guild(interaction.guild_id)
+        if interaction.guild_id is None:
+            await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
+            return
+        guild_id = interaction.guild_id
+        init_guild(guild_id)
         embed = discord.Embed(
             title="📜 AetherX Logging Configuration",
             description="Select a preset below to quickly enable a set of events, "
                         "or choose **Custom Setup** to toggle individual events and set per‑event channels.",
             color=discord.Color.blue()
         )
-        view = LogSetupView(self, interaction.guild_id)
+        view = LogSetupView(self, guild_id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def send_log(self, guild: discord.Guild, event_name: str, embed: discord.Embed):
@@ -425,7 +433,7 @@ class Logging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
-        if message.guild is None:
+        if message.guild is None or not isinstance(message.channel, discord.TextChannel):
             return
         embed = discord.Embed(
             title="Message Deleted",
@@ -440,7 +448,7 @@ class Logging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
-        if before.guild is None or before.content == after.content:
+        if before.guild is None or not isinstance(before.channel, discord.TextChannel) or before.content == after.content:
             return
         embed = discord.Embed(
             title="Message Edited",
@@ -469,10 +477,12 @@ class Logging(commands.Cog):
     async def on_member_remove(self, member: discord.Member):
         guild = member.guild
         is_kick = False
+        kick_entry = None
         try:
             async for entry in guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
-                if entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
+                if entry.target and entry.target.id == member.id and (discord.utils.utcnow() - entry.created_at).total_seconds() < 10:
                     is_kick = True
+                    kick_entry = entry
                     break
         except:
             pass
@@ -485,9 +495,9 @@ class Logging(commands.Cog):
             color=color,
             timestamp=discord.utils.utcnow()
         )
-        if is_kick:
-            embed.add_field(name="Kicked by", value=entry.user.mention if entry.user else "Unknown")
-            embed.add_field(name="Reason", value=entry.reason or "No reason provided")
+        if is_kick and kick_entry:
+            embed.add_field(name="Kicked by", value=kick_entry.user.mention if kick_entry.user else "Unknown")
+            embed.add_field(name="Reason", value=kick_entry.reason or "No reason provided")
         await self.send_log(guild, event_name, embed)
 
     @commands.Cog.listener()
@@ -500,7 +510,7 @@ class Logging(commands.Cog):
         )
         try:
             async for entry in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
-                if entry.target.id == user.id:
+                if entry.target and entry.target.id == user.id:
                     embed.add_field(name="Banned by", value=entry.user.mention if entry.user else "Unknown")
                     embed.add_field(name="Reason", value=entry.reason or "No reason provided")
                     break
@@ -622,7 +632,7 @@ class Logging(commands.Cog):
                 timestamp=discord.utils.utcnow()
             )
             await self.send_log(guild, "event_voice_leave", embed)
-        elif before.channel != after.channel and after.channel is not None:
+        elif before.channel is not None and after.channel is not None and before.channel != after.channel:
             embed = discord.Embed(
                 title="Voice Move",
                 description=f"{member.mention} moved from {before.channel.mention} to {after.channel.mention}",
