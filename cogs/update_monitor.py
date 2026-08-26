@@ -19,6 +19,12 @@ GITHUB_TOKEN = os.getenv("AETHERX_GITHUB_TOKEN")
 GITLAB_TOKEN = os.getenv("AETHERX_GITLAB_TOKEN")
 STEAM_API_KEY = os.getenv("AETHERX_STEAM_API_KEY")
 
+# Debug
+if STEAM_API_KEY:
+    print(f"[DEBUG] STEAM_API_KEY loaded: {STEAM_API_KEY[:5]}... (first 5 chars)")
+else:
+    print("[DEBUG] ⚠️ STEAM_API_KEY is EMPTY - check .env file and variable name!")
+
 DATABASE_PATH = "AetherX.db"
 SOURCE_TYPES = ["github", "gitlab", "steam", "rss"]
 
@@ -127,11 +133,18 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return None
 
     async def _fetch_steam_news(self, app_id: str) -> Optional[Dict[str, Any]]:
-        if not STEAM_API_KEY:
+        steam_key = STEAM_API_KEY or os.getenv("AETHERX_STEAM_API_KEY")
+        if not steam_key:
             print("[UpdateMonitor] Skipping Steam - no API key set.")
             return None
+
         url = "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/"
-        params = {"appid": app_id, "count": 1, "format": "json"}
+        params = {
+            "appid": app_id,
+            "count": 1,
+            "format": "json",
+            "key": steam_key
+        }
         try:
             async with self.session.get(url, params=params) as resp:
                 if resp.status == 200:
@@ -150,6 +163,8 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
                         "published_at": datetime.fromtimestamp(item["date"], tz=timezone.utc).isoformat()
                     }
                 else:
+                    error_text = await resp.text()
+                    print(f"[UpdateMonitor] Steam API error {resp.status}: {error_text[:200]}")
                     return None
         except Exception as e:
             print(f"[UpdateMonitor] Steam fetch error: {e}")
