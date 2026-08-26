@@ -1,21 +1,24 @@
+import os
 import asyncio
 import sqlite3
 import re
+from typing import cast
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any
 
 import aiohttp
 import discord
 import feedparser
 from discord import app_commands
 from discord.ext import commands, tasks
+from dotenv import load_dotenv
 
-# ==========================================
-# CONFIGURATION - No API Keys Required!
-# ==========================================
-GITHUB_TOKEN = None   # Optional - leave as None to work without it
-GITLAB_TOKEN = None   # Optional - leave as None to work without it
-STEAM_API_KEY = None  # Optional - leave as None (Steam will just be skipped)
+load_dotenv()
+
+GITHUB_TOKEN = os.getenv("AETHERX_GITHUB_TOKEN")
+GITLAB_TOKEN = os.getenv("AETHERX_GITLAB_TOKEN")
+STEAM_API_KEY = os.getenv("AETHERX_STEAM_API_KEY")
+
 DATABASE_PATH = "AetherX.db"
 SOURCE_TYPES = ["github", "gitlab", "steam", "rss"]
 
@@ -23,9 +26,10 @@ SOURCE_TYPES = ["github", "gitlab", "steam", "rss"]
 class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
     """
     Monitors GitHub, GitLab, Steam, and RSS feeds for updates.
-    - No API keys required (works out-of-the-box).
+    - API keys are loaded from environment variables (.env file).
+    - No keys required (falls back gracefully).
     - Hourly background checks.
-    - Can auto-create webhooks or send as bot messages.
+    - Auto-creates webhooks or sends as bot messages.
     - All notification embeds are Dark Blue.
     """
 
@@ -36,9 +40,6 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
         self._init_db()
         self.monitor_task.start()
 
-    # ==========================================
-    # 1. DATABASE SETUP
-    # ==========================================
     def _init_db(self):
         conn = sqlite3.connect(self.db_path)
         c = conn.cursor()
@@ -47,7 +48,7 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 guild_id INTEGER NOT NULL,
                 channel_id INTEGER NOT NULL,
-                webhook_url TEXT,                   -- Auto-created or user-provided
+                webhook_url TEXT,
                 source_type TEXT NOT NULL,
                 source_identifier TEXT NOT NULL,
                 last_known_state TEXT,
@@ -71,9 +72,6 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return result
         return await asyncio.to_thread(_execute)
 
-    # ==========================================
-    # 2. FETCHERS (No API keys required)
-    # ==========================================
     async def _fetch_github_release(self, repo: str) -> Optional[Dict[str, Any]]:
         url = f"https://api.github.com/repos/{repo}/releases/latest"
         headers = {"Accept": "application/vnd.github.v3+json"}
@@ -179,9 +177,6 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             print(f"[UpdateMonitor] RSS fetch error: {e}")
             return None
 
-    # ==========================================
-    # 3. DISPATCHER
-    # ==========================================
     async def _fetch_update(self, source_type: str, identifier: str) -> Optional[Dict[str, Any]]:
         if source_type == "github":
             return await self._fetch_github_release(identifier)
@@ -193,19 +188,15 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return await self._fetch_rss_feed(identifier)
         return None
 
-    # ==========================================
-    # 4. NOTIFICATION SENDER (Dark Blue Embed)
-    # ==========================================
     async def _send_update(self, channel_id: int, webhook_url: Optional[str], embed: discord.Embed):
-        """Sends via webhook (auto-created or provided) or falls back to bot message."""
         try:
             if webhook_url:
                 webhook = discord.Webhook.from_url(webhook_url, session=self.session)
                 await webhook.send(embed=embed, username="AetherX Updates", wait=True)
             else:
                 channel = self.bot.get_channel(channel_id)
-                if isinstance(channel, discord.TextChannel):
-                    await channel.send(embed=embed)
+                if isinstance(channel, discord.abc.Messageable):
+                    await cast(discord.abc.Messageable, channel).send(embed=embed)
                 else:
                     print(f"[UpdateMonitor] Channel {channel_id} not found.")
         except discord.Forbidden:
@@ -213,18 +204,15 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
         except Exception as e:
             print(f"[UpdateMonitor] Send error: {e}")
 
-    # ==========================================
-    # 5. BACKGROUND MONITOR (Runs Hourly)
-    # ==========================================
-    @tasks.loop(hours=1)  # Checks every hour - safe without API keys
+    @tasks.loop(hours=1)
     async def monitor_task(self):
         await self.bot.wait_until_ready()
 
         print("[UpdateMonitor] Running hourly background check...")
-        subscriptions = cast(list[tuple], await self._db_execute(
+        subscriptions = await self._db_execute(
             "SELECT id, guild_id, channel_id, webhook_url, source_type, source_identifier, last_known_state FROM subscriptions",
             fetch=True
-        ))
+        ) or []
 
         for sub_id, _, channel_id, webhook_url, src_type, identifier, last_known in subscriptions:
             update_data = await self._fetch_update(src_type, identifier)
@@ -235,12 +223,11 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             if not new_state or new_state == last_known:
                 continue
 
-            # --- Build Dark Blue Embed ---
             embed = discord.Embed(
                 title=f"🚀 {update_data.get('name', 'New Update')}",
                 description=update_data.get("body", ""),
                 url=update_data.get("url"),
-                color=discord.Color.dark_blue(),  # <-- Dark Blue as requested
+                color=discord.Color.dark_blue(),
                 timestamp=datetime.now()
             )
             embed.add_field(name="Source", value=f"`{src_type}/{identifier}`", inline=False)
@@ -258,9 +245,6 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
     async def before_monitor(self):
         await self.bot.wait_until_ready()
 
-    # ==========================================
-    # 6. SLASH COMMANDS (With Auto-Webhook!)
-    # ==========================================
     @commands.hybrid_group(name="update", fallback="help", description="Manage server update subscriptions.")
     async def update_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
@@ -316,7 +300,6 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
 
         await ctx.defer(ephemeral=True)
 
-        # Validate source exists
         test_fetch = await self._fetch_update(source_type, identifier)
         if test_fetch is None:
             return await ctx.send(
@@ -340,13 +323,11 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             except Exception as e:
                 return await ctx.send(f"❌ Failed to create webhook: {e}", ephemeral=True)
 
-        # Save subscription
         await self._db_execute(
             "INSERT INTO subscriptions (guild_id, channel_id, webhook_url, source_type, source_identifier, last_known_state, added_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (ctx.guild.id, channel.id, webhook_url, source_type, identifier, None, ctx.author.id)
         )
 
-        # Set initial state to avoid old notifications
         latest_state = test_fetch.get("id") or test_fetch.get("tag")
         if latest_state:
             rows = await self._db_execute(
@@ -416,30 +397,28 @@ class UpdateMonitorCog(commands.Cog, name="Update Monitor"):
             return await ctx.send("❌ Subscription ID not found in this server.")
 
         sub = rows[0]
-        if ctx.author.id != sub[1] and (
-            not isinstance(ctx.author, discord.Member)
-            or not ctx.author.guild_permissions.manage_guild
+        if (
+            ctx.author.id != sub[1]
+            and (
+                not isinstance(ctx.author, discord.Member)
+                or not ctx.author.guild_permissions.manage_guild
+            )
         ):
             return await ctx.send("❌ You don't have permission to remove this.")
 
-        # Delete the webhook if it was auto-created
         if sub[4]:
             try:
-                # Fetch and delete the webhook
                 webhooks = await ctx.guild.webhooks()
                 for wh in webhooks:
                     if wh.url == sub[4]:
                         await wh.delete()
                         break
             except:
-                pass  # Ignore if we can't delete it
+                pass
 
         await self._db_execute("DELETE FROM subscriptions WHERE id = ?", (subscription_id,))
         await ctx.send(f"✅ Removed subscription `{sub[2]}/{sub[3]}` (ID: {subscription_id}).")
 
-    # ==========================================
-    # 7. CLEANUP
-    # ==========================================
     async def cog_unload(self):
         self.monitor_task.cancel()
         await self.session.close()
