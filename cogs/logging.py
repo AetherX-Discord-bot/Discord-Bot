@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import sqlite3
 import json
-from typing import Optional, Dict, Any, cast
+from typing import Optional, Dict, Any
 
 PRESETS = {
     "minimal": {
@@ -29,8 +29,7 @@ PRESETS = {
         "event_member_unban": 1,
         "event_member_kick": 1,
     },
-    "all": {
-    }
+    "all": {}
 }
 
 EVENT_COLUMNS = [
@@ -58,7 +57,6 @@ PRESETS["all"] = {col: 1 for col in EVENT_COLUMNS}
 DB_PATH = "AetherX.db"
 
 def init_db():
-    """Create the guild_log_config table if it doesn't exist."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     col_defs = [
@@ -75,7 +73,6 @@ def init_db():
     conn.close()
 
 def get_config(guild_id: int) -> Optional[Dict[str, Any]]:
-    """Fetch the full config row for a guild."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("SELECT * FROM guild_log_config WHERE guild_id = ?", (guild_id,))
@@ -87,7 +84,6 @@ def get_config(guild_id: int) -> Optional[Dict[str, Any]]:
     return None
 
 def init_guild(guild_id: int):
-    """Insert a default row for a guild if missing."""
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT OR IGNORE INTO guild_log_config (guild_id) VALUES (?)", (guild_id,))
@@ -95,7 +91,6 @@ def init_guild(guild_id: int):
     conn.close()
 
 def apply_preset(guild_id: int, preset_name: str, channel_id: Optional[int] = None) -> bool:
-    """Apply a preset, optionally setting the global log channel."""
     preset = PRESETS.get(preset_name)
     if not preset:
         return False
@@ -116,7 +111,6 @@ def apply_preset(guild_id: int, preset_name: str, channel_id: Optional[int] = No
     return True
 
 def toggle_event(guild_id: int, event_name: str, enabled: bool):
-    """Enable or disable a single event."""
     if event_name not in EVENT_COLUMNS:
         return
     conn = sqlite3.connect(DB_PATH)
@@ -125,12 +119,12 @@ def toggle_event(guild_id: int, event_name: str, enabled: bool):
               (1 if enabled else 0, guild_id))
     conn.commit()
     conn.close()
+    c = conn.cursor()
     c.execute("UPDATE guild_log_config SET preset = NULL WHERE guild_id = ?", (guild_id,))
     conn.commit()
     conn.close()
 
 def set_event_channel_override(guild_id: int, event_name: str, channel_id: Optional[int]):
-    """Set a per‑event log channel override (or remove if None)."""
     config = get_config(guild_id)
     if not config:
         return
@@ -146,20 +140,75 @@ def set_event_channel_override(guild_id: int, event_name: str, channel_id: Optio
     conn.commit()
     conn.close()
 
-def get_log_channel(guild: discord.Guild, config: Dict[str, Any], event_name: str) -> Optional[discord.TextChannel]:
-    """Determine the log channel for a specific event, respecting overrides."""
+def get_log_channel(guild: discord.Guild, config: Dict, event_name: str) -> Optional[discord.TextChannel]:
     overrides = json.loads(config.get("event_channel_overrides") or "{}")
     channel_id = overrides.get(event_name)
     if channel_id is None:
         channel_id = config.get("log_channel_id")
     if channel_id:
         channel = guild.get_channel(channel_id)
-        if isinstance(channel, discord.TextChannel):
-            return channel
+        return channel if isinstance(channel, discord.TextChannel) else None
     return None
 
+class PresetApplyView(discord.ui.View):
+    """View shown after selecting a preset to allow channel selection."""
+    def __init__(self, cog, guild_id: int, preset_name: str):
+        super().__init__(timeout=120)
+        self.cog = cog
+        self.guild_id = guild_id
+        self.preset_name = preset_name
+        self.selected_channel = None
+
+        self.channel_select = discord.ui.ChannelSelect(
+            channel_types=[discord.ChannelType.text],
+            placeholder="Select a log channel (optional)",
+            min_values=0,
+            max_values=1
+        )
+        self.add_item(self.channel_select)
+
+        confirm = discord.ui.Button(label="Apply Preset", style=discord.ButtonStyle.success)
+        async def confirm_callback(interaction: discord.Interaction):
+            channel = self.channel_select.values[0] if self.channel_select.values else None
+            channel_id = channel.id if channel else None
+            success = apply_preset(self.guild_id, self.preset_name, channel_id)
+            if success:
+                msg = f"✅ Applied preset **{self.preset_name}**."
+                if channel:
+                    msg += f" Log channel set to {channel.mention}."
+                else:
+                    config = get_config(self.guild_id)
+                    if config and config.get("log_channel_id"):
+                        msg += " Keeping existing log channel."
+                    else:
+                        msg += " **No log channel set** – logs will not be sent until you set one."
+                await interaction.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Invalid preset.", ephemeral=True)
+            self.stop()
+        confirm.callback = confirm_callback
+        self.add_item(confirm)
+
+        skip = discord.ui.Button(label="Skip (keep current)", style=discord.ButtonStyle.secondary)
+        async def skip_callback(interaction: discord.Interaction):
+            config = get_config(self.guild_id)
+            current_channel = config.get("log_channel_id") if config else None
+            success = apply_preset(self.guild_id, self.preset_name, current_channel)
+            if success:
+                msg = f"✅ Applied preset **{self.preset_name}**."
+                if current_channel:
+                    msg += f" Keeping existing log channel <#{current_channel}>."
+                else:
+                    msg += " **No log channel set** – logs will not be sent until you set one."
+                await interaction.response.send_message(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message("❌ Invalid preset.", ephemeral=True)
+            self.stop()
+        skip.callback = skip_callback
+        self.add_item(skip)
+
 class LogSetupView(discord.ui.View):
-    """Main setup view with preset selection and custom entry."""
+    """Main setup view with preset selection."""
     def __init__(self, cog, guild_id: int):
         super().__init__(timeout=300)
         self.cog = cog
@@ -189,8 +238,8 @@ class LogSetupView(discord.ui.View):
             if not config:
                 init_guild(self.guild_id)
                 config = get_config(self.guild_id)
-            if not config:
-                await interaction.edit_original_response(content="Unable to load logging configuration.", embed=None, view=None)
+            if config is None:
+                await interaction.edit_original_response(content="❌ Could not initialize logging configuration.", embed=None, view=None)
                 return
             view = EventToggleView(self.cog, self.guild_id, config)
             embed = discord.Embed(
@@ -236,24 +285,13 @@ class LogSetupView(discord.ui.View):
             await interaction.edit_original_response(embed=embed, view=view)
         else:
             preset = select.values[0]
-            config = get_config(self.guild_id)
-            if not config:
-                init_guild(self.guild_id)
-                config = get_config(self.guild_id)
-            if not config:
-                await interaction.response.send_message("❌ Unable to load logging configuration.", ephemeral=True)
-                return
-            current_channel = config.get("log_channel_id")
-            success = apply_preset(self.guild_id, preset, current_channel)
-            if success:
-                await interaction.response.send_message(
-                    f"✅ Applied preset **{preset}** to this server.",
-                    ephemeral=True
-                )
-            else:
-                await interaction.response.send_message(
-                    "❌ Invalid preset.", ephemeral=True
-                )
+            embed = discord.Embed(
+                title="Apply Preset",
+                description=f"You selected **{preset}**. Choose a log channel below, or skip to keep the current one.",
+                color=discord.Color.blue()
+            )
+            view = PresetApplyView(self.cog, self.guild_id, preset)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class EventToggleView(discord.ui.View):
     """View containing a multi‑select for toggling events."""
@@ -303,7 +341,7 @@ class OverrideView(discord.ui.View):
         super().__init__(timeout=300)
         self.cog = cog
         self.guild_id = guild_id
-        self.selected_event: Optional[str] = None
+        self.selected_event = None
 
         event_select = discord.ui.Select(
             placeholder="Choose an event",
@@ -371,27 +409,22 @@ class Logging(commands.Cog):
     @app_commands.command(name="log", description="Configure the logging system for this server.")
     @app_commands.default_permissions(manage_guild=True)
     async def log(self, interaction: discord.Interaction):
-        """Main entry point for logging configuration."""
-        if interaction.guild is None or interaction.guild_id is None:
+        if interaction.guild_id is None:
             await interaction.response.send_message("❌ This command can only be used in a server.", ephemeral=True)
             return
-        guild_id = interaction.guild_id
-        init_guild(guild_id)
+        init_guild(interaction.guild_id)
         embed = discord.Embed(
             title="📜 AetherX Logging Configuration",
             description="Select a preset below to quickly enable a set of events, "
                         "or choose **Custom Setup** to toggle individual events and set per‑event channels.",
             color=discord.Color.blue()
         )
-        view = LogSetupView(self, guild_id)
+        view = LogSetupView(self, interaction.guild_id)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
     async def send_log(self, guild: discord.Guild, event_name: str, embed: discord.Embed):
-        """Send a log embed to the appropriate channel for an event."""
         config = get_config(guild.id)
-        if not config:
-            return
-        if not config.get(event_name, 0):
+        if not config or not config.get(event_name, 0):
             return
         channel = get_log_channel(guild, config, event_name)
         if channel:
@@ -402,7 +435,7 @@ class Logging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
-        if message.guild is None or not isinstance(message.channel, discord.abc.GuildChannel):
+        if message.guild is None or not isinstance(message.channel, discord.TextChannel):
             return
         embed = discord.Embed(
             title="Message Deleted",
@@ -417,9 +450,8 @@ class Logging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
-        if (before.guild is None
-            or not isinstance(before.channel, discord.abc.GuildChannel)
-            or before.content == after.content):
+        if (before.guild is None or before.content == after.content
+                or not isinstance(before.channel, discord.TextChannel)):
             return
         embed = discord.Embed(
             title="Message Edited",
@@ -503,7 +535,6 @@ class Logging(commands.Cog):
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         if before.timed_out_until != after.timed_out_until:
             if after.timed_out_until is not None and (before.timed_out_until is None or after.timed_out_until > before.timed_out_until):
-                # Muted
                 embed = discord.Embed(
                     title="Member Muted",
                     description=f"{after.mention} (`{after.id}`)",
@@ -513,7 +544,6 @@ class Logging(commands.Cog):
                 embed.add_field(name="Until", value=discord.utils.format_dt(after.timed_out_until, style='R'))
                 await self.send_log(after.guild, "event_member_mute", embed)
             elif before.timed_out_until is not None and after.timed_out_until is None:
-                # Unmuted
                 embed = discord.Embed(
                     title="Member Unmuted",
                     description=f"{after.mention} (`{after.id}`)",
@@ -606,11 +636,13 @@ class Logging(commands.Cog):
             )
             await self.send_log(guild, "event_voice_leave", embed)
         elif before.channel != after.channel and after.channel is not None:
-            if before.channel is None:
+            before_channel = before.channel
+            after_channel = after.channel
+            if before_channel is None:
                 return
             embed = discord.Embed(
                 title="Voice Move",
-                description=f"{member.mention} moved from {before.channel.mention} to {after.channel.mention}",
+                description=f"{member.mention} moved from {before_channel.mention} to {after_channel.mention}",
                 color=discord.Color.gold(),
                 timestamp=discord.utils.utcnow()
             )
