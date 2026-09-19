@@ -112,7 +112,7 @@ def create_ticket_record(guild_id: int, user_id: int, channel_id: int, category_
             INSERT INTO tickets (guild_id, user_id, channel_id, category_id, reason, status, created_at)
             VALUES (?, ?, ?, ?, ?, 'open', ?)
             """,
-            (guild_id, user_id, channel_id, category_id, reason, datetime.utcnow().isoformat()),
+            (guild_id, user_id, channel_id, category_id, reason, datetime.now(timezone.utc).isoformat()),
         )
         conn.commit()
 
@@ -196,7 +196,7 @@ class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
 
 class TicketOpenButton(discord.ui.Button):
     def __init__(self, label: str):
-        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        super().__init__(label=label, style=discord.ButtonStyle.primary, custom_id="tickets:open")
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user is None:
@@ -216,7 +216,7 @@ class TicketOwnerView(discord.ui.View):
 
 class CloseTicketButton(discord.ui.Button):
     def __init__(self):
-        super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger)
+        super().__init__(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="tickets:close")
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -283,8 +283,8 @@ class AdminTicketActions(discord.ui.View):
         super().__init__(timeout=None)
         self.channel_id = channel_id
 
-    @discord.ui.button(label="Delete Ticket", style=discord.ButtonStyle.danger)
-    async def delete_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Delete Ticket", style=discord.ButtonStyle.danger, custom_id="tickets:delete")
+    async def delete_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not interaction.guild:
             await interaction.response.send_message("This command can only be used in a guild.", ephemeral=True)
             return
@@ -296,7 +296,7 @@ class AdminTicketActions(discord.ui.View):
 
         await interaction.response.send_message(
             "Are you sure you want to delete this ticket channel?",
-            view=DeleteTicketConfirm(self.channel_id),
+            view=DeleteTicketConfirm(interaction.channel.id if interaction.channel else self.channel_id),
             ephemeral=True,
         )
 
@@ -306,8 +306,8 @@ class DeleteTicketConfirm(discord.ui.View):
         super().__init__(timeout=60)
         self.channel_id = channel_id
 
-    @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger, custom_id="tickets:confirm_delete")
+    async def confirm(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not interaction.guild:
             await interaction.response.send_message("This command can only be used in a guild.", ephemeral=True)
             return
@@ -337,8 +337,8 @@ class DeleteTicketConfirm(discord.ui.View):
         except (discord.NotFound, discord.HTTPException):
             pass
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary, custom_id="tickets:cancel_delete")
+    async def cancel(self, interaction: discord.Interaction, _button: discord.ui.Button):
         await interaction.response.send_message("Ticket deletion cancelled.", ephemeral=True)
 
 
@@ -354,6 +354,14 @@ class TicketCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         init_db()
+
+    async def cog_load(self):
+        # Re-register persistent views so buttons in messages survive restarts.
+        panel = discord.ui.View(timeout=None)
+        panel.add_item(TicketOpenButton("Open Ticket"))
+        self.bot.add_view(panel)
+        self.bot.add_view(TicketOwnerView())
+        self.bot.add_view(AdminTicketActions(0))
 
     @app_commands.command(name="setup_tickets", description="Set up the ticket embed and buttons for your server.")
     @app_commands.describe(
