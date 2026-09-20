@@ -9,8 +9,7 @@ class AutoResponder(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.db_path = "autoresponder.db"
-        # Cache: {guild_id: {trigger_lower: response}}
+        self.db_path = "AetherX.db"
         self.cache: dict[int, dict[str, str]] = {}
 
     async def cog_load(self):
