@@ -1,5 +1,6 @@
 import os
 import asyncio
+import contextlib
 import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
@@ -10,19 +11,28 @@ from discord.ext import commands
 
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(PROJECT_ROOT, "AetherX.db")
+
+DB_PATH = os.environ.get("AETHERX_DB", os.path.join(PROJECT_ROOT, "AetherX.db"))
 
 
-
-def get_db_connection() -> sqlite3.Connection:
+@contextlib.contextmanager
+def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db():
     print(f"[tickets] DB path: {DB_PATH}  exists={os.path.exists(DB_PATH)}")
-    with get_db_connection() as conn:
+    with db() as conn:
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS ticket_settings (
@@ -54,11 +64,10 @@ def init_db():
             )
             """
         )
-        conn.commit()
 
 
 def get_setting(guild_id: int, key: str):
-    with get_db_connection() as conn:
+    with db() as conn:
         row = conn.execute(
             "SELECT * FROM ticket_settings WHERE guild_id = ?",
             (guild_id,),
@@ -68,8 +77,17 @@ def get_setting(guild_id: int, key: str):
     return row[key]
 
 
-def save_setting(guild_id: int, setup_channel_id: int, category_id: int, staff_role_id: int, embed_title: str, embed_description: str, button_label: str, embed_color: int):
-    with get_db_connection() as conn:
+def save_setting(
+    guild_id: int,
+    setup_channel_id: int,
+    category_id: int,
+    staff_role_id: int,
+    embed_title: str,
+    embed_description: str,
+    button_label: str,
+    embed_color: int,
+):
+    with db() as conn:
         conn.execute(
             """
             INSERT INTO ticket_settings (
@@ -85,13 +103,15 @@ def save_setting(guild_id: int, setup_channel_id: int, category_id: int, staff_r
                 button_label=excluded.button_label,
                 embed_color=excluded.embed_color
             """,
-            (guild_id, setup_channel_id, category_id, staff_role_id, embed_title, embed_description, button_label, embed_color),
+            (
+                guild_id, setup_channel_id, category_id, staff_role_id,
+                embed_title, embed_description, button_label, embed_color,
+            ),
         )
-        conn.commit()
 
 
 def get_ticket_by_channel(channel_id: int):
-    with get_db_connection() as conn:
+    with db() as conn:
         return conn.execute(
             "SELECT * FROM tickets WHERE channel_id = ? ORDER BY id DESC LIMIT 1",
             (channel_id,),
@@ -99,16 +119,15 @@ def get_ticket_by_channel(channel_id: int):
 
 
 def update_ticket_status(channel_id: int, status: str, closed_by: Optional[int] = None):
-    with get_db_connection() as conn:
+    with db() as conn:
         conn.execute(
             "UPDATE tickets SET status = ?, closed_by = ?, closed_at = ? WHERE channel_id = ?",
             (status, closed_by, datetime.now(timezone.utc).isoformat(), channel_id),
         )
-        conn.commit()
 
 
 def create_ticket_record(guild_id: int, user_id: int, channel_id: int, category_id: Optional[int], reason: str):
-    with get_db_connection() as conn:
+    with db() as conn:
         conn.execute(
             """
             INSERT INTO tickets (guild_id, user_id, channel_id, category_id, reason, status, created_at)
@@ -116,7 +135,14 @@ def create_ticket_record(guild_id: int, user_id: int, channel_id: int, category_
             """,
             (guild_id, user_id, channel_id, category_id, reason, datetime.now(timezone.utc).isoformat()),
         )
-        conn.commit()
+
+
+def get_settings_for_guild(guild_id: int):
+    with db() as conn:
+        return conn.execute(
+            "SELECT * FROM ticket_settings WHERE guild_id = ?",
+            (guild_id,),
+        ).fetchone()
 
 
 class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
@@ -135,40 +161,78 @@ class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
 
     async def on_submit(self, interaction: discord.Interaction):
         if interaction.user.id != self.author.id:
-            await interaction.response.send_message("Only the ticket creator can submit this form.", ephemeral=True)
+            await interaction.response.send_message(
+                "Only the ticket creator can submit this form.", ephemeral=True
+            )
             return
 
         guild = interaction.guild
         if guild is None:
-            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            await interaction.response.send_message(
+                "This command can only be used in a server.", ephemeral=True
+            )
             return
 
-        row = self.get_settings(guild.id)
+        row = get_settings_for_guild(guild.id)
         if not row:
-            await interaction.response.send_message("Ticket setup has not been configured for this server yet.", ephemeral=True)
+            await interaction.response.send_message(
+                "Ticket setup has not been configured for this server yet.", ephemeral=True
+            )
             return
+
+        # Acknowledge immediately -- channel creation + send can exceed Discord's 3s window.
+        await interaction.response.defer(ephemeral=True)
 
         category_channel = guild.get_channel(row["category_id"]) if row["category_id"] else None
         category = category_channel if isinstance(category_channel, discord.CategoryChannel) else None
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False, send_messages=False, connect=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True),
-        }
 
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(
+                view_channel=False, send_messages=False, connect=False
+            ),
+            interaction.user: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                attach_files=True,
+            ),
+        }
         for role in guild.roles:
-            if role.permissions.administrator or role.permissions.manage_channels or role.permissions.manage_guild:
-                overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=True, manage_channels=True)
+            if (
+                role.permissions.administrator
+                or role.permissions.manage_channels
+                or role.permissions.manage_guild
+            ):
+                overwrites[role] = discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                    attach_files=True,
+                    manage_channels=True,
+                )
 
         channel_name = f"ticket-{interaction.user.name.lower()}"
         if len(channel_name) > 90:
             channel_name = f"ticket-{interaction.user.name.lower()[:80]}"
 
-        ticket_channel = await guild.create_text_channel(
-            name=channel_name,
-            category=category,
-            overwrites=overwrites,
-            reason=f"Ticket created by {interaction.user} for: {self.reason.value}",
-        )
+        try:
+            ticket_channel = await guild.create_text_channel(
+                name=channel_name,
+                category=category,
+                overwrites=overwrites,
+                reason=f"Ticket created by {interaction.user} for: {self.reason.value}",
+            )
+        except discord.Forbidden:
+            await interaction.followup.send(
+                "I don't have permission to create ticket channels. Check my role position and permissions.",
+                ephemeral=True,
+            )
+            return
+        except discord.HTTPException as e:
+            await interaction.followup.send(
+                f"Failed to create the ticket channel: {e}", ephemeral=True
+            )
+            return
 
         embed = discord.Embed(
             title="Ticket Opened",
@@ -184,16 +248,17 @@ class TicketReasonModal(discord.ui.Modal, title="Open a Ticket"):
             ticket_message = f"{staff_role.mention} {interaction.user.mention}"
 
         await ticket_channel.send(ticket_message, embed=embed, view=TicketOwnerView())
-        create_ticket_record(guild.id, interaction.user.id, ticket_channel.id, category.id if category else None, self.reason.value)
+        create_ticket_record(
+            guild.id,
+            interaction.user.id,
+            ticket_channel.id,
+            category.id if category else None,
+            self.reason.value,
+        )
 
-        await interaction.response.send_message(f"Your ticket has been created: {ticket_channel.mention}", ephemeral=True)
-
-    def get_settings(self, guild_id: int):
-        with get_db_connection() as conn:
-            return conn.execute(
-                "SELECT * FROM ticket_settings WHERE guild_id = ?",
-                (guild_id,),
-            ).fetchone()
+        await interaction.followup.send(
+            f"Your ticket has been created: {ticket_channel.mention}", ephemeral=True
+        )
 
 
 class TicketOpenButton(discord.ui.Button):
@@ -202,12 +267,18 @@ class TicketOpenButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user is None:
-            await interaction.response.send_message("You must be a member of this server to open a ticket.", ephemeral=True)
+            await interaction.response.send_message(
+                "You must be a member of this server to open a ticket.", ephemeral=True
+            )
             return
         if interaction.guild is None:
-            await interaction.response.send_message("This button can only be used in a server.", ephemeral=True)
+            await interaction.response.send_message(
+                "This button can only be used in a server.", ephemeral=True
+            )
             return
-        await interaction.response.send_modal(TicketReasonModal(interaction.guild, interaction.user))
+        await interaction.response.send_modal(
+            TicketReasonModal(interaction.guild, interaction.user)
+        )
 
 
 class TicketOwnerView(discord.ui.View):
@@ -222,11 +293,12 @@ class CloseTicketButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        await asyncio.sleep(5)
 
         channel = interaction.channel
         if not isinstance(channel, discord.TextChannel):
-            await interaction.followup.send("This button can only be used in a ticket channel.", ephemeral=True)
+            await interaction.followup.send(
+                "This button can only be used in a ticket channel.", ephemeral=True
+            )
             return
 
         guild = interaction.guild
@@ -237,12 +309,16 @@ class CloseTicketButton(discord.ui.Button):
         member = interaction.user
         guild_member = guild.get_member(member.id)
         if guild_member is None:
-            await interaction.followup.send("Could not retrieve member information.", ephemeral=True)
+            await interaction.followup.send(
+                "Could not retrieve member information.", ephemeral=True
+            )
             return
 
         ticket = get_ticket_by_channel(channel.id)
         if not ticket:
-            await interaction.followup.send("No ticket record was found for this channel.", ephemeral=True)
+            await interaction.followup.send(
+                "No ticket record was found for this channel.", ephemeral=True
+            )
             return
 
         if ticket["status"] != "open":
@@ -250,7 +326,9 @@ class CloseTicketButton(discord.ui.Button):
             return
 
         if member.id != ticket["user_id"] and not guild_member.guild_permissions.manage_channels:
-            await interaction.followup.send("Only the ticket creator or a moderator can close this ticket.", ephemeral=True)
+            await interaction.followup.send(
+                "Only the ticket creator or a moderator can close this ticket.", ephemeral=True
+            )
             return
 
         try:
@@ -259,7 +337,9 @@ class CloseTicketButton(discord.ui.Button):
             pass
 
         try:
-            await channel.set_permissions(guild_member, view_channel=False, send_messages=False, read_message_history=False)
+            await channel.set_permissions(
+                guild_member, view_channel=False, send_messages=False, read_message_history=False
+            )
         except discord.Forbidden:
             pass
 
@@ -269,10 +349,13 @@ class CloseTicketButton(discord.ui.Button):
             await channel.send(
                 embed=discord.Embed(
                     title="Ticket Closed",
-                    description=f"This ticket has been closed by {member.mention}. The ticket channel has been renamed and the ticket creator was removed from access.",
+                    description=(
+                        f"This ticket has been closed by {member.mention}. "
+                        "The ticket channel has been renamed and the ticket creator was removed from access."
+                    ),
                     color=discord.Color.orange(),
                 ),
-                view=AdminTicketActions(channel.id)
+                view=AdminTicketActions(channel.id),
             )
         except discord.Forbidden:
             pass
@@ -288,17 +371,25 @@ class AdminTicketActions(discord.ui.View):
     @discord.ui.button(label="Delete Ticket", style=discord.ButtonStyle.danger, custom_id="tickets:delete")
     async def delete_button(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not interaction.guild:
-            await interaction.response.send_message("This command can only be used in a guild.", ephemeral=True)
+            await interaction.response.send_message(
+                "This command can only be used in a guild.", ephemeral=True
+            )
             return
 
         member = interaction.guild.get_member(interaction.user.id)
-        if not member or (not member.guild_permissions.manage_channels and not member.guild_permissions.administrator):
-            await interaction.response.send_message("You do not have permission to delete tickets.", ephemeral=True)
+        if not member or (
+            not member.guild_permissions.manage_channels
+            and not member.guild_permissions.administrator
+        ):
+            await interaction.response.send_message(
+                "You do not have permission to delete tickets.", ephemeral=True
+            )
             return
 
+        channel_id = interaction.channel.id if interaction.channel else self.channel_id
         await interaction.response.send_message(
             "Are you sure you want to delete this ticket channel?",
-            view=DeleteTicketConfirm(interaction.channel.id if interaction.channel else self.channel_id),
+            view=DeleteTicketConfirm(channel_id),
             ephemeral=True,
         )
 
@@ -311,17 +402,26 @@ class DeleteTicketConfirm(discord.ui.View):
     @discord.ui.button(label="Confirm Delete", style=discord.ButtonStyle.danger, custom_id="tickets:confirm_delete")
     async def confirm(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not interaction.guild:
-            await interaction.response.send_message("This command can only be used in a guild.", ephemeral=True)
+            await interaction.response.send_message(
+                "This command can only be used in a guild.", ephemeral=True
+            )
             return
 
         member = interaction.guild.get_member(interaction.user.id)
-        if not member or (not member.guild_permissions.manage_channels and not member.guild_permissions.administrator):
-            await interaction.response.send_message("Only staff can delete this ticket.", ephemeral=True)
+        if not member or (
+            not member.guild_permissions.manage_channels
+            and not member.guild_permissions.administrator
+        ):
+            await interaction.response.send_message(
+                "Only staff can delete this ticket.", ephemeral=True
+            )
             return
 
         channel = interaction.guild.get_channel(self.channel_id)
         if channel is None:
-            await interaction.response.send_message("This ticket channel was already deleted.", ephemeral=True)
+            await interaction.response.send_message(
+                "This ticket channel was already deleted.", ephemeral=True
+            )
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -329,7 +429,9 @@ class DeleteTicketConfirm(discord.ui.View):
         try:
             await channel.delete(reason=f"Ticket deleted by {interaction.user}")
         except discord.Forbidden:
-            await interaction.followup.send("I do not have permission to delete this ticket channel.", ephemeral=True)
+            await interaction.followup.send(
+                "I do not have permission to delete this ticket channel.", ephemeral=True
+            )
             return
 
         update_ticket_status(self.channel_id, "deleted", interaction.user.id)
@@ -344,14 +446,6 @@ class DeleteTicketConfirm(discord.ui.View):
         await interaction.response.send_message("Ticket deletion cancelled.", ephemeral=True)
 
 
-def get_settings_for_guild(guild_id: int):
-    with get_db_connection() as conn:
-        return conn.execute(
-            "SELECT * FROM ticket_settings WHERE guild_id = ?",
-            (guild_id,),
-        ).fetchone()
-
-
 class TicketCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -363,6 +457,8 @@ class TicketCog(commands.Cog):
         panel.add_item(TicketOpenButton("Open Ticket"))
         self.bot.add_view(panel)
         self.bot.add_view(TicketOwnerView())
+        # AdminTicketActions only needs a placeholder here; the delete flow
+        # always uses interaction.channel.id, so we register a dummy instance.
         self.bot.add_view(AdminTicketActions(0))
 
     @app_commands.command(name="setup_tickets", description="Set up the ticket embed and buttons for your server.")
@@ -385,7 +481,9 @@ class TicketCog(commands.Cog):
         staff_role: Optional[discord.Role] = None,
     ):
         if not interaction.guild or not interaction.permissions.manage_channels:
-            await interaction.response.send_message("You need Manage Channels to configure tickets.", ephemeral=True)
+            await interaction.response.send_message(
+                "You need Manage Channels to configure tickets.", ephemeral=True
+            )
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -406,7 +504,9 @@ class TicketCog(commands.Cog):
         view.add_item(TicketOpenButton(button_label))
 
         await channel.send(embed=embed, view=view)
-        await interaction.followup.send(f"Ticket setup complete in {channel.mention}.", ephemeral=True)
+        await interaction.followup.send(
+            f"Ticket setup complete in {channel.mention}.", ephemeral=True
+        )
 
 
 async def setup(bot: commands.Bot):
