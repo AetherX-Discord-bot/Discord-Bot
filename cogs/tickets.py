@@ -13,6 +13,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_ROOT, "AetherX.db")
 
 
+
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -20,6 +21,7 @@ def get_db_connection() -> sqlite3.Connection:
 
 
 def init_db():
+    print(f"[tickets] DB path: {DB_PATH}  exists={os.path.exists(DB_PATH)}")
     with get_db_connection() as conn:
         conn.execute(
             """
