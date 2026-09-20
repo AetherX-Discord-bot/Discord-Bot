@@ -20,7 +20,6 @@ def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        conn.execute("PRAGMA journal_mode=WAL")
         yield conn
         conn.commit()
     except Exception:
