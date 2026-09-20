@@ -1,7 +1,29 @@
+import os
+import contextlib
+
 import aiosqlite
 import discord
 from discord.ext import commands
 from discord import app_commands
+
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.environ.get("AETHERX_DB", os.path.join(PROJECT_ROOT, "AetherX.db"))
+
+
+@contextlib.asynccontextmanager
+async def db():
+    """Short-lived aiosqlite connection: commit on success, rollback on error, always close."""
+    conn = await aiosqlite.connect(DB_PATH)
+    conn.row_factory = aiosqlite.Row
+    try:
+        yield conn
+        await conn.commit()
+    except Exception:
+        await conn.rollback()
+        raise
+    finally:
+        await conn.close()
 
 
 class AutoResponder(commands.Cog):
@@ -9,13 +31,13 @@ class AutoResponder(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.db_path = "AetherX.db"
         self.cache: dict[int, dict[str, str]] = {}
 
     async def cog_load(self):
-        """Create the table and load existing triggers into cache."""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
+        print(f"[autoresponder] DB path: {DB_PATH}")
+
+        async with db() as conn:
+            await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS autoresponses (
                     guild_id INTEGER NOT NULL,
@@ -25,20 +47,18 @@ class AutoResponder(commands.Cog):
                 )
                 """
             )
-            await db.commit()
 
-        # Populate cache
-        async with aiosqlite.connect(self.db_path) as db:
-            async with db.execute("SELECT guild_id, trigger, response FROM autoresponses") as cursor:
+        async with db() as conn:
+            async with conn.execute(
+                "SELECT guild_id, trigger, response FROM autoresponses"
+            ) as cursor:
                 async for guild_id, trigger, response in cursor:
-                    self.cache.setdefault(guild_id, {})[trigger.lower()] = response
-
-    # ---------- Commands ----------
+                    self.cache.setdefault(guild_id, {})[trigger] = response
 
     @app_commands.command(name="setup", description="Add or update an auto-response.")
     @app_commands.describe(
         trigger="The phrase to look for in messages",
-        response="What the bot should reply with"
+        response="What the bot should reply with",
     )
     @app_commands.checks.has_permissions(manage_guild=True)
     async def setup(self, interaction: discord.Interaction, trigger: str, response: str):
@@ -50,8 +70,8 @@ class AutoResponder(commands.Cog):
 
         trigger_key = trigger.lower().strip()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
+        async with db() as conn:
+            await conn.execute(
                 """
                 INSERT INTO autoresponses (guild_id, trigger, response)
                 VALUES (?, ?, ?)
@@ -59,7 +79,6 @@ class AutoResponder(commands.Cog):
                 """,
                 (interaction.guild_id, trigger_key, response),
             )
-            await db.commit()
 
         self.cache.setdefault(interaction.guild_id, {})[trigger_key] = response
 
@@ -80,13 +99,13 @@ class AutoResponder(commands.Cog):
 
         trigger_key = trigger.lower().strip()
 
-        async with aiosqlite.connect(self.db_path) as db:
-            cursor = await db.execute(
+        async with db() as conn:
+            cursor = await conn.execute(
                 "DELETE FROM autoresponses WHERE guild_id = ? AND trigger = ?",
                 (interaction.guild_id, trigger_key),
             )
-            await db.commit()
             deleted = cursor.rowcount
+            await cursor.close()
 
         if deleted:
             self.cache.get(interaction.guild_id, {}).pop(trigger_key, None)
@@ -117,14 +136,8 @@ class AutoResponder(commands.Cog):
 
         embed = discord.Embed(title="Auto-Responses", color=discord.Color.blurple())
         for trigger, response in sorted(guild_triggers.items()):
-            embed.add_field(
-                name=f"🔹 {trigger}",
-                value=response[:1000],
-                inline=False,
-            )
+            embed.add_field(name=f"🔹 {trigger}", value=response[:1000], inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    # ---------- Listener ----------
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -142,11 +155,11 @@ class AutoResponder(commands.Cog):
                     await message.reply(response, mention_author=False)
                 except discord.HTTPException:
                     pass
-                return  # one reply per message; remove `return` to allow multiple
+                return
 
-    # ---------- Error handling ----------
-
-    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+    async def cog_app_command_error(
+        self, interaction: discord.Interaction, error: app_commands.AppCommandError
+    ):
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(
                 "You need the **Manage Server** permission to use this command.",
