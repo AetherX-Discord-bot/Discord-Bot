@@ -26,7 +26,7 @@ class AboutCog(commands.Cog):
         )
         about_embed.add_field(
             name="Bot Version",
-            value="0.3.1-alpha",
+            value="0.3.2-alpha",
             inline=False
         )
         about_embed.add_field(

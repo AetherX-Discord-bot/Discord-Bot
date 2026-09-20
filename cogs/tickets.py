@@ -31,7 +31,6 @@ def db():
 
 
 def init_db():
-    print(f"[tickets] DB path: {DB_PATH}  exists={os.path.exists(DB_PATH)}")
     with db() as conn:
         conn.execute(
             """
