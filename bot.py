@@ -8,7 +8,7 @@ import sqlite3
 import time
 from dotenv import load_dotenv
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Awaitable, Optional
 
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
@@ -118,12 +118,12 @@ bot = AetherXBot(command_prefix="$", intents=intents)
 @bot.event
 async def on_ready():
     animator = BootAnimator()
-    await bot.change_presence(activity=discord.Game(name="Version 0.3.2 Alpha out now | $help"))
+    await bot.change_presence(activity=discord.Game(name="Version 0.3.3 Alpha out now | $help"))
     database = sqlite3.connect("AetherX.db")
     cursor = database.cursor()
     
-    steps = [
-        ("Syncing slash commands...", bot.tree.sync()),
+    steps: list[tuple[str, Optional[Awaitable[object]]]] = [
+        ("Please Sync after startup", None),
         ("Setting status...", None),
         ("Preparing statistics...", None),
         ("Finalizing startup...", None),
