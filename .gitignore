@@ -9,3 +9,5 @@ AetherX.db
 .patreon.key
 .yt_dlp_cache/soundcloud
 .client_id.json
+AetherX.db-shm
+AetherX.db-wal
