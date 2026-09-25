@@ -99,6 +99,15 @@ ytdl_format_options = {
     
     'cachedir': './yt_dlp_cache',
     'cookiefile': cookie_file if cookie_file else None,
+
+    # Explicit clients make YouTube extraction more reliable with current
+    # yt-dlp releases.  Keep cookies enabled for authenticated/age-restricted
+    # videos when a cookies file is available.
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['web', 'android'],
+        },
+    },
     
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
@@ -484,7 +493,6 @@ class Music(commands.Cog):
                         return
 
                 if 'entries' in data and len(data['entries']) > 1:
-                    playlist_tracks = []
                     valid_entries = [entry for entry in data['entries'] if entry is not None]
                     
                     if not valid_entries:
@@ -531,7 +539,13 @@ class Music(commands.Cog):
                         return
 
                     track_title = track_data.get('title', 'Unknown Title')
-                    track_url = track_data.get('url', '')
+                    # Flat YouTube results may contain a stream URL or video
+                    # id in `url`; re-extract the canonical page URL instead.
+                    track_url = (
+                        track_data.get('webpage_url')
+                        or track_data.get('original_url')
+                        or track_data.get('url', '')
+                    )
                     
                     if not track_url:
                         await ctx.send("❌ Could not get audio URL for this track.")
@@ -543,7 +557,9 @@ class Music(commands.Cog):
                         download=True
                     )
                     
-                    if full_data and 'url' in full_data:
+                    if full_data and full_data.get('_filename') and os.path.exists(full_data['_filename']):
+                        final_url = full_data['_filename']
+                    elif full_data and 'url' in full_data:
                         final_url = full_data['url']
                     else:
                         final_url = track_url
@@ -594,7 +610,6 @@ class Music(commands.Cog):
                     return
 
                 if 'entries' in data and len(data['entries']) > 1:
-                    playlist_tracks = []
                     valid_entries = [entry for entry in data['entries'] if entry is not None]
                     
                     if not valid_entries:
@@ -636,7 +651,11 @@ class Music(commands.Cog):
                         return
 
                     track_title = track_data.get('title', 'Unknown Title')
-                    track_url = track_data.get('url', '')
+                    track_url = (
+                        track_data.get('webpage_url')
+                        or track_data.get('original_url')
+                        or track_data.get('url', '')
+                    )
                     
                     if not track_url:
                         await ctx.send("❌ Could not get audio URL for this SoundCloud track.")
@@ -648,7 +667,9 @@ class Music(commands.Cog):
                         download=True
                     )
                     
-                    if full_data and 'url' in full_data:
+                    if full_data and full_data.get('_filename') and os.path.exists(full_data['_filename']):
+                        final_url = full_data['_filename']
+                    elif full_data and 'url' in full_data:
                         final_url = full_data['url']
                     else:
                         final_url = track_url
