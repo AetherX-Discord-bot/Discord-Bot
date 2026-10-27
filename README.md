@@ -17,3 +17,9 @@ python bot.py
 
 ## Bot Code Information
 ![Analytics](https://repobeats.axiom.co/api/embed/30ea3e4e18bb961e59d4b35e9aee27d17e5505d5.svg "Repobeats analytics image")
+
+
+
+
+
+i was here >:3c
