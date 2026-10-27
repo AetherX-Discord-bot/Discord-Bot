@@ -22,4 +22,4 @@ python bot.py
 
 
 
-i was here >:3c
+Snow was here >:3c
