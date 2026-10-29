@@ -7,7 +7,7 @@ class Say(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="say", description="Send a message as the bot in the current channel.")
-    async def say(self, ctx: commands.Context,*, message: str, attachment: discord.Attachment = None, Embed: bool = False):
+    async def say(self, ctx: commands.Context,*, message: str, attachment: discord.Attachment = None, embed: bool = False):
         """Make the bot say something"""
         if not isinstance(ctx.author, discord.Member) or not ctx.author.guild_permissions.administrator:
             if ctx.interaction is not None:
@@ -29,7 +29,7 @@ class Say(commands.Cog):
             else:
                 for att in ctx.interaction.attachments:
                     files.append(await att.to_file())
-        if Embed:
+        if embed:
             e = discord.Embed(description=message, color=0x5865F2)
             if attachment is not None:
                 e.set_image(url=f"attachmen://{attachment.filename}")
