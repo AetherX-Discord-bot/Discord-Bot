@@ -23,12 +23,11 @@ class Say(commands.Cog):
             send_kwargs["reference"] = ctx.message.reference
             send_kwargs["mention_author"] = False
         files: list[discord.File] = []
-        if ctx.interaction is not None:
-            if attachment is not None:
-                files.append(await attachment.to_file())
-            else:
-                for att in ctx.interaction.attachments:
-                    files.append(await att.to_file())
+        if attachment is not None:
+            files.append(await attachment.to_file())
+        elif ctx.message is not None:
+            for att in ctx.message.attachments:
+                files.append(await att.to_file())
         if embed:
             e = discord.Embed(description=message, color=0x5865F2)
             if attachment is not None:
