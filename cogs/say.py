@@ -33,7 +33,7 @@ class Say(commands.Cog):
         if embed:
             e = discord.Embed(description=message, color=0x5865F2)
             if files:
-                e.set_image(url=f"attachmen://{files[0].filename}")
+                e.set_image(url=f"attachment://{files[0].filename}")
                 
             await ctx.channel.send(embed=e, **send_kwargs)
         else:
