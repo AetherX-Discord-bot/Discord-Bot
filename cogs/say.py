@@ -7,7 +7,7 @@ class Say(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="say", description="Send a message as the bot in the current channel.")
-    async def say(self, ctx: commands.Context, message: str, attachment: discord.Attachment = None):
+    async def say(self, ctx: commands.Context,*, message: str, attachment: discord.Attachment = None, Embed: Bool = False):
         """Make the bot say something"""
         if not isinstance(ctx.author, discord.Member) or not ctx.author.guild_permissions.administrator:
             if ctx.interaction is not None:
@@ -18,20 +18,29 @@ class Say(commands.Cog):
 
         if ctx.interaction is not None:
             await ctx.interaction.response.defer(ephemeral=True)
-        files: list[discord.File] = []
-        if attachment is not None:
-            files.append(await attachment.to_file())
         send_kwargs: dict = {}
-        if files:
-            send_kwargs["files"] = files
-        channel = ctx.channel
-        if channel is not None and isinstance(channel, discord.abc.Messageable):
-            await channel.send(message, **send_kwargs)
-        else:
-            if ctx.interaction is not None:
-                await ctx.interaction.followup.send(message, ephemeral=False, **send_kwargs)
+        if ctx.message is not None and ctx.message.reference is not None:
+            send_kwargs["reference"] = ctx.message.reference
+            send_kwargs["mention_author"] = False
+        files: list[discord.File] = []
+        if ctx.interaction is not None:
+            if attachment is not None:
+                files.append(await attachment.to_file())
             else:
-                await ctx.send(message, **send_kwargs)
+                for att in ctx.interaction.attachments:
+                    files.append(await att.to_file())
+        if Embed:
+            e = discord.Embed(description=message, color=0x5865F2)
+            if attachment is not None:
+                e.set_image(url=f"attachmen://{attachment.filename}")
+                if ctx.interaction is not None:
+                    e.set_image(url=f"attachment://{ctx.message.attachments[0].filename}")
+            await ctx.channel.send(embed=e, **send_kwargs)
+        else:
+            if files:
+                send_kwargs["files"] = files
+            await ctx.channel.send(message, **send_kwargs)
+                
 
 async def setup(bot):
     await bot.add_cog(Say(bot))
