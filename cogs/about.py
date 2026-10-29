@@ -147,21 +147,21 @@ class AboutCog(commands.Cog):
                         @discord.ui.button(label='Previous', style=discord.ButtonStyle.primary, disabled=True)
                         async def previous(self, interaction: discord.Interaction, button: Button):
                             self.page -= 1
-                            self.next.disabled = False
+                            self.children[1].disabled = False
                             if self.page == 1:
                                 button.disabled = True
                             await self.update(interaction)
                         @discord.ui.button(label='Next', style=discord.ButtonStyle.primary, disabled=(total_pages <= 1))
                         async def next(self, interaction: discord.Interaction, button: Button):
                             self.page += 1
-                            self.previous.disabled = False
+                            self.children[0].disabled = False
                             if self.page == total_pages:
                                 button.disabled = True
                             await self.update(interaction)
                     view = HelpView()
                     if total_pages == 1:
-                        view.previous.disabled = True
-                        view.next.disabled = True
+                        view.children[0].disabled = True
+                        view.children[1].disabled = True
                     await ctx.send(embed=get_embed(1), view=view)
                     return
                 else:

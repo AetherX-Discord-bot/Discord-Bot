@@ -11,7 +11,10 @@ class Feedback(commands.Cog):
     async def feedback(self, interaction: discord.Interaction):
         """Slash command that opens a feedback modal."""
 
-        class FeedbackModal(discord.ui.Modal, title="Submit Feedback"):
+        class FeedbackModal(discord.ui.Modal):
+            def __init__(self):
+                super().__init__(title="Submit Feedback")
+
             feedback_input = discord.ui.TextInput(
                 label="Your feedback",
                 placeholder="Type here...",
