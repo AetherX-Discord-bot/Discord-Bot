@@ -30,10 +30,9 @@ class Say(commands.Cog):
                 files.append(await att.to_file())
         if embed:
             e = discord.Embed(description=message, color=0x5865F2)
-            if attachment is not None:
-                e.set_image(url=f"attachmen://{attachment.filename}")
-                if ctx.interaction is not None:
-                    e.set_image(url=f"attachment://{ctx.message.attachments[0].filename}")
+            if files:
+                e.set_image(url=f"attachmen://{files[0].filename}")
+                
             await ctx.channel.send(embed=e, **send_kwargs)
         else:
             if files:
