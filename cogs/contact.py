@@ -18,4 +18,4 @@ class Contact(commands.Cog):
 
 
 async def setup(bot):
-    bot.add_cog(Contact(bot))
+    await bot.add_cog(Contact(bot))
