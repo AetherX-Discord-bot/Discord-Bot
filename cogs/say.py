@@ -7,7 +7,7 @@ class Say(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="say", description="Send a message as the bot in the current channel.")
-    async def say(self, ctx: commands.Context, message: str):
+    async def say(self, ctx: commands.Context, message: str, attachment: discord.Attachment = None):
         """Make the bot say something"""
         if not isinstance(ctx.author, discord.Member) or not ctx.author.guild_permissions.administrator:
             if ctx.interaction is not None:
@@ -18,15 +18,20 @@ class Say(commands.Cog):
 
         if ctx.interaction is not None:
             await ctx.interaction.response.defer(ephemeral=True)
-
+        files: list[discord.File] = []
+        if attachment is not None:
+            files.append(await attachment.to_file())
+        send_kwargs: dict = {}
+        if files:
+            send_kwargs["files"] = files
         channel = ctx.channel
         if channel is not None and isinstance(channel, discord.abc.Messageable):
-            await channel.send(message)
+            await channel.send(message, **send_kwargs)
         else:
             if ctx.interaction is not None:
-                await ctx.interaction.followup.send(message, ephemeral=False)
+                await ctx.interaction.followup.send(message, ephemeral=False, **send_kwargs)
             else:
-                await ctx.send(message)
+                await ctx.send(message, **send_kwargs)
 
 async def setup(bot):
     await bot.add_cog(Say(bot))
