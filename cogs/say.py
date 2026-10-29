@@ -7,7 +7,7 @@ class Say(commands.Cog):
         self.bot = bot
 
     @commands.hybrid_command(name="say", description="Send a message as the bot in the current channel.")
-    async def say(self, ctx: commands.Context,*, message: str, attachment: discord.Attachment = None, Embed: Bool = False):
+    async def say(self, ctx: commands.Context,*, message: str, attachment: discord.Attachment = None, Embed: bool = False):
         """Make the bot say something"""
         if not isinstance(ctx.author, discord.Member) or not ctx.author.guild_permissions.administrator:
             if ctx.interaction is not None:
