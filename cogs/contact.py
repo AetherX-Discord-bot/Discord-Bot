@@ -17,5 +17,5 @@ class Contact(commands.Cog):
         await ctx.send(embed=e)
 
 
-def setup(bot):
+async def setup(bot):
     bot.add_cog(Contact(bot))
