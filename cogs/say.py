@@ -28,6 +28,8 @@ class Say(commands.Cog):
         elif ctx.message is not None:
             for att in ctx.message.attachments:
                 files.append(await att.to_file())
+        if files:
+            send_kwargs["files"] = files
         if embed:
             e = discord.Embed(description=message, color=0x5865F2)
             if files:
@@ -35,8 +37,7 @@ class Say(commands.Cog):
                 
             await ctx.channel.send(embed=e, **send_kwargs)
         else:
-            if files:
-                send_kwargs["files"] = files
+            
             await ctx.channel.send(message, **send_kwargs)
                 
 
