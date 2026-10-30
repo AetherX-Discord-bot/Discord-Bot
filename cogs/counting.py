@@ -187,7 +187,7 @@ class CountingCog(commands.Cog, name="Counting Game"):
             'countdown_mode': False,
             'allow_decimal': False,
             'reset_on_fail': True,
-            'cooldown_seconds': 5,
+            'cooldown_seconds': 3,
             'webhook_url': None,
             'created_at': datetime.now(timezone.utc).isoformat(),
             'updated_at': datetime.now(timezone.utc).isoformat()
@@ -207,7 +207,7 @@ class CountingCog(commands.Cog, name="Counting Game"):
                 f"2. Each user must say the next number in sequence\n"
                 f"3. Don't break the chain!\n\n"
                 f"**Default Settings:**\n"
-                f"• Cooldown: 5 seconds\n"
+                f"• Cooldown: 3 seconds\n"
                 f"• Reset on fail: Yes\n"
                 f"• Allow same user: No\n\n"
                 f"Use `!counting config` to customize settings."
@@ -225,7 +225,7 @@ class CountingCog(commands.Cog, name="Counting Game"):
                 "1. Start counting from `1`\n"
                 "2. Each user must say the next number\n"
                 "3. Don't break the chain!\n"
-                "4. 5-second cooldown between counts\n\n"
+                "4. 3-second cooldown between counts\n\n"
                 "**Get ready to count!**\n"
                 "First number: `1`"
             ),
