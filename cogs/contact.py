@@ -10,11 +10,12 @@ class Contact(commands.Cog):
     @commands.hybrid_command(name="contact", description="Contact the bot developers")
     async def contact(self,ctx):
         e = discord.Embed(title="Contact Us", description="You can reach the bot developers through the following methods:")
-        e.add_field(name="Snow", value="Email or text (if you have an ios device) snowekitsune@aether-x.org (fastest response)\n"
+        e.add_field(name="Snow", value="Email or text (if you have an ios device) @ snowekitsune@aether-x.org (fastest response)\n"
                     "DM https://discord.com/users/811016330517676073", inline=True)
         e.add_field(name="Androgalaxi", value="Join the main AetherX server [here](https://discord.gg/yFY8Fnbtp9)\n"
-                    "DM https://discord.com/users/435125886996709377", inline=True)
-        e.add_field(name="Lmutt", value="Join the main AetherX server at [here](https://discord.gg/yFY8Fnbtp9)", inline=True)
+                    "DM https://discord.com/users/435125886996709377\n"
+                    "Email @ androgalaxi@aether-x.org", inline=True)
+        e.add_field(name="Lmutt", value="Join the main AetherX server at [here](https://discord.gg/yFY8Fnbtp9)\n", inline=True)
         await ctx.send(embed=e)
 
 
