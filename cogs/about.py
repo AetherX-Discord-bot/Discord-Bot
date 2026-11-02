@@ -8,7 +8,7 @@ class AboutCog(commands.Cog):
         self.bot = bot
         self._original_help = bot.help_command
 
-    @commands.command(
+    @commands.hybrid_command(
         name="about",
         description="Shows information about the bot"
     )
