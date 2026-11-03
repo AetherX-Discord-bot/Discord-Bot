@@ -88,23 +88,21 @@ cookie_file = setup_cookies()
 # Core yt-dlp configuration – tuned for stability with current YouTube
 # ---------------------------------------------------------------------------
 ytdl_format_options: Dict[str, Any] = {
-    'format': 'bestaudio/best',
+    'format': 'bestaudio/best',  # Robust selector; will pick the best audio available.
     'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
     'restrictfilenames': True,
-    'noplaylist': False,               # We want playlists; the `play` command handles them.
+    'noplaylist': False,
     'nocheckcertificate': True,
     'ignoreerrors': True,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    # Do NOT force extract_flat in the base config.  For single tracks we want
-    # full extraction; for playlists the flat extraction is handled explicitly.
     'cachedir': './yt_dlp_cache',
     'cookiefile': cookie_file if cookie_file else None,
 
-    # --- Stability & bot-detection mitigation --------------------------------
-    'force_ipv4': True,                # Helps with SSL/EOF resets[reference:5]
+    # --- Stability & bot-detection mitigation ---------------------------------
+    'force_ipv4': True,
     'http_headers': {
         'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -114,18 +112,16 @@ ytdl_format_options: Dict[str, Any] = {
     'socket_timeout': 15,
     'extractor_retries': 3,
 
-    # --- Player client strategy ----------------------------------------------
-    # Use the default clients.  The old ['web', 'android'] combination is
-    # problematic: `android` is being phased out and cannot use cookies;
-    # `web` often needs a PO Token.  `default` (or a chain like ['tv','web'])
-    # is far more reliable.
+    # --- Player client strategy ------------------------------------------------
+    # Bias toward 'tv' (or 'ios') to avoid SABR-only experiments on the 'web' client.
+    # The JS runtime (Deno) will handle any challenges for these clients.
     'extractor_args': {
         'youtube': {
-            'player_client': ['default'],   # or ['tv', 'web'] as a fallback
+            'player_client': ['tv', 'ios'],  # Fallback chain; tv is tried first.
         },
     },
 
-    # --- Audio extraction -----------------------------------------------------
+    # --- Audio extraction ------------------------------------------------------
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
@@ -133,7 +129,7 @@ ytdl_format_options: Dict[str, Any] = {
     }],
     'keepvideo': False,
 
-    # --- Politeness / retries -------------------------------------------------
+    # --- Politeness / retries --------------------------------------------------
     'sleep_interval': 1,
     'max_sleep_interval': 2,
     'retries': 3,
