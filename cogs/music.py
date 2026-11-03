@@ -117,7 +117,7 @@ ytdl_format_options: Dict[str, Any] = {
     # The JS runtime (Deno) will handle any challenges for these clients.
     'extractor_args': {
         'youtube': {
-            'player_client': ['tv_embedded', 'ios'],  # Fallback chain; tv is tried first.
+            'player_client': ['tv',, 'tv_simply' 'web_safari', "default"],  # Fallback chain; tv is tried first.
         },
     },
 
