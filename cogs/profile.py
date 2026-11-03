@@ -46,6 +46,7 @@ class Profile(commands.Cog):
             embed.set_thumbnail(url=user.display_avatar.url)
             embed.add_field(name="**Bio**", value=bio or "No bio set.", inline=False)
             embed.add_field(name="**Affiliation**", value=affil, inline=False)
+            embed.add_field(name="**Dabloons**", value=str(dabloons), inline=False)
             await ctx.send(embed=embed)
         finally:
             conn.close()

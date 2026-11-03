@@ -84,41 +84,56 @@ def setup_cookies():
 
 cookie_file = setup_cookies()
 
-ytdl_format_options = {
+# ---------------------------------------------------------------------------
+# Core yt-dlp configuration – tuned for stability with current YouTube
+# ---------------------------------------------------------------------------
+ytdl_format_options: Dict[str, Any] = {
     'format': 'bestaudio/best',
     'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
     'restrictfilenames': True,
-    'noplaylist': False,
+    'noplaylist': False,               # We want playlists; the `play` command handles them.
     'nocheckcertificate': True,
     'ignoreerrors': True,
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
     'source_address': '0.0.0.0',
-    'extract_flat': 'in_playlist',
-    
+    # Do NOT force extract_flat in the base config.  For single tracks we want
+    # full extraction; for playlists the flat extraction is handled explicitly.
     'cachedir': './yt_dlp_cache',
     'cookiefile': cookie_file if cookie_file else None,
 
-    # Explicit clients make YouTube extraction more reliable with current
-    # yt-dlp releases.  Keep cookies enabled for authenticated/age-restricted
-    # videos when a cookies file is available.
+    # --- Stability & bot-detection mitigation --------------------------------
+    'force_ipv4': True,                # Helps with SSL/EOF resets[reference:5]
+    'http_headers': {
+        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                       'AppleWebKit/537.36 (KHTML, like Gecko) '
+                       'Chrome/126.0.0.0 Safari/537.36'),
+        'Accept-Language': 'en-US,en;q=0.9',
+    },
+    'socket_timeout': 15,
+    'extractor_retries': 3,
+
+    # --- Player client strategy ----------------------------------------------
+    # Use the default clients.  The old ['web', 'android'] combination is
+    # problematic: `android` is being phased out and cannot use cookies;
+    # `web` often needs a PO Token.  `default` (or a chain like ['tv','web'])
+    # is far more reliable.
     'extractor_args': {
         'youtube': {
-            'player_client': ['web', 'android'],
+            'player_client': ['default'],   # or ['tv', 'web'] as a fallback
         },
     },
-    
+
+    # --- Audio extraction -----------------------------------------------------
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
         'preferredquality': '192',
     }],
-    
-    'extractaudio': True,
-    'audioformat': 'mp3',
     'keepvideo': False,
-    
+
+    # --- Politeness / retries -------------------------------------------------
     'sleep_interval': 1,
     'max_sleep_interval': 2,
     'retries': 3,
@@ -130,8 +145,6 @@ ffmpeg_options: Dict[str, Any] = {
     'options': '-vn',
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
 }
-
-ytdl: yt_dlp.YoutubeDL = yt_dlp.YoutubeDL(ytdl_format_options)  # type: ignore
 
 audio_cache = {}
 CACHE_DURATION = 3600
@@ -182,17 +195,14 @@ class MusicPlayer:
             rate_limiter.add_request(platform)
             self._last_request_time = time.time()
             
-            temp_options = ytdl_format_options.copy()
-            
-            if download:
-                temp_options['extract_flat'] = False
-            
-            temp_ytdl = yt_dlp.YoutubeDL(temp_options)  # type: ignore
-            
-            data = await self.bot.loop.run_in_executor(
-                None,
-                lambda: temp_ytdl.extract_info(url, download=download)
-            )
+            # Create a fresh YoutubeDL instance for each extraction.
+            # We do not mutate the global options here; this avoids
+            # accidentally leaving `extract_flat` set for later calls.
+            with yt_dlp.YoutubeDL(ytdl_format_options) as ydl:
+                data = await self.bot.loop.run_in_executor(
+                    None,
+                    lambda: ydl.extract_info(url, download=download)
+                )
             
             if download and data and '_filename' in data:
                 downloaded_file = data.get('_filename')
@@ -645,7 +655,6 @@ class Music(commands.Cog):
                             await ctx.send("❌ No SoundCloud results found!")
                             return
 
-                    # Validate data
                     if not track_data or not isinstance(track_data, dict):
                         await ctx.send("❌ Invalid data received from SoundCloud search.")
                         return
