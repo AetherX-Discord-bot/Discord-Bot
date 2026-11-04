@@ -88,7 +88,7 @@ cookie_file = setup_cookies()
 # Core yt-dlp configuration – tuned for stability with current YouTube
 # ---------------------------------------------------------------------------
 ytdl_format_options: Dict[str, Any] = {
-    'format': 'bestaudio/best',  # Robust selector; will pick the best audio available.
+    'format': 'bestaudio/best',
     'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
     'restrictfilenames': True,
     'noplaylist': False,
@@ -112,16 +112,20 @@ ytdl_format_options: Dict[str, Any] = {
     'socket_timeout': 15,
     'extractor_retries': 3,
 
-    # --- Player client strategy ------------------------------------------------
-    # Bias toward 'tv' (or 'ios') to avoid SABR-only experiments on the 'web' client.
-    # The JS runtime (Deno) will handle any challenges for these clients.
+    # --- JS runtime (Deno) ----------------------------------------------------
+    'js_runtimes': ['deno'],
+
+    # --- Player client strategy ----------------------------------------------
+    # NOTE: 'tv_simply' is intentionally excluded because it does not support
+    # account cookies. 'tv' works with cookies; 'web_safari' and 'default'
+    # act as fallbacks when 'tv' is unavailable.
     'extractor_args': {
         'youtube': {
-            'player_client': ['tv', 'web_safari', "default"],  # Fallback chain; tv is tried first.
+            'player_client': ['tv', 'web_safari', 'default'],
         },
     },
 
-    # --- Audio extraction ------------------------------------------------------
+    # --- Audio extraction -----------------------------------------------------
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
@@ -129,7 +133,7 @@ ytdl_format_options: Dict[str, Any] = {
     }],
     'keepvideo': False,
 
-    # --- Politeness / retries --------------------------------------------------
+    # --- Politeness / retries -------------------------------------------------
     'sleep_interval': 1,
     'max_sleep_interval': 2,
     'retries': 3,
@@ -144,6 +148,10 @@ ffmpeg_options: Dict[str, Any] = {
 
 audio_cache = {}
 CACHE_DURATION = 3600
+
+# Hard cap on a single extraction so a stuck connection can't hang the bot
+# until the VPS is rebooted.
+EXTRACTION_TIMEOUT = 180  # seconds
 
 class MusicPlayer:
     def __init__(self, ctx):
@@ -168,7 +176,7 @@ class MusicPlayer:
         self.pause_start = None
 
     async def safe_extract_info(self, url, platform, download=False):
-        """Safely extract info with rate limiting and delays"""
+        """Safely extract info with rate limiting, delays, and a hard timeout."""
         if not rate_limiter.can_make_request(platform):
             wait_time = random.randint(30, 60)
             print(f"⚠️ Rate limit approached for {platform}. Waiting {wait_time}s")
@@ -191,33 +199,65 @@ class MusicPlayer:
             rate_limiter.add_request(platform)
             self._last_request_time = time.time()
             
-            # Create a fresh YoutubeDL instance for each extraction.
-            # We do not mutate the global options here; this avoids
-            # accidentally leaving `extract_flat` set for later calls.
             with yt_dlp.YoutubeDL(ytdl_format_options) as ydl:
-                data = await self.bot.loop.run_in_executor(
-                    None,
-                    lambda: ydl.extract_info(url, download=download)
+                data = await asyncio.wait_for(
+                    self.bot.loop.run_in_executor(
+                        None,
+                        lambda: ydl.extract_info(url, download=download)
+                    ),
+                    timeout=EXTRACTION_TIMEOUT,
                 )
             
-            if download and data and '_filename' in data:
-                downloaded_file = data.get('_filename')
-                if downloaded_file and os.path.exists(downloaded_file):
+            # ------------------------------------------------------------------
+            # Resolve the *actual* post-processed file path.
+            # `_filename` often points to the source .webm that the FFmpeg
+            # postprocessor deleted, so prefer `requested_downloads[*].filepath`
+            # and `filepath` first.
+            # ------------------------------------------------------------------
+            if download and data:
+                downloaded_file = None
+
+                for d in (data.get('requested_downloads') or []):
+                    fp = d.get('filepath')
+                    if fp and os.path.exists(fp):
+                        downloaded_file = fp
+                        break
+
+                if not downloaded_file:
+                    fp = data.get('filepath')
+                    if fp and os.path.exists(fp):
+                        downloaded_file = fp
+
+                if not downloaded_file:
+                    fp = data.get('_filename')
+                    if fp and os.path.exists(fp):
+                        downloaded_file = fp
+
+                if downloaded_file:
                     if DOWNLOAD_FOLDER not in downloaded_file:
                         filename = os.path.basename(downloaded_file)
                         new_path = os.path.join(DOWNLOAD_FOLDER, filename)
                         if not os.path.exists(new_path):
                             shutil.move(downloaded_file, new_path)
-                            downloaded_file = new_path
-                    
+                        downloaded_file = new_path
+
                     self._downloaded_files.append(downloaded_file)
+                    data['_local_file'] = downloaded_file
                     print(f"💾 Downloaded file saved to: {downloaded_file}")
+                else:
+                    print(f"⚠️ Download succeeded but file path could not be resolved for {url}")
+                    print(f"   requested_downloads: {data.get('requested_downloads')}")
+                    print(f"   filepath: {data.get('filepath')}")
+                    print(f"   _filename: {data.get('_filename')}")
             
             if data:
                 audio_cache[cache_key] = (time.time(), data)
                 
             return data
-            
+
+        except asyncio.TimeoutError:
+            print(f"❌ Extraction timed out after {EXTRACTION_TIMEOUT}s for {url}")
+            return None
         except Exception as e:
             print(f"❌ Extraction failed for {url}: {e}")
             return None
@@ -233,10 +273,38 @@ class MusicPlayer:
                 print(f"❌ Error cleaning up file {file_path}: {e}")
         self._downloaded_files.clear()
 
+    def _resolve_audio_source(self, full_data, fallback_url):
+        """Return the best local file path, or fall back to a stream URL."""
+        if not full_data:
+            return fallback_url
+
+        local = full_data.get('_local_file')
+        if local and os.path.exists(local):
+            return local
+
+        fp = full_data.get('filepath')
+        if fp and os.path.exists(fp):
+            return fp
+
+        fn = full_data.get('_filename')
+        if fn and os.path.exists(fn):
+            return fn
+
+        # Last resort: stream URL (may be short-lived for some platforms)
+        url = full_data.get('url')
+        if url:
+            return url
+
+        entries = full_data.get('entries') or []
+        if entries and entries[0].get('url'):
+            return entries[0]['url']
+
+        return fallback_url
+
     async def load_playlist_track(self, track_info):
         """Load a single track from a playlist with proper URL extraction"""
         try:
-            platform = 'soundcloud' if 'soundcloud' in track_info.get('url', '').lower() else 'youtube'
+            platform = 'soundcloud' if 'soundcloud' in (track_info.get('url') or '').lower() else 'youtube'
             track_url = track_info.get('url') or track_info.get('webpage_url')
             
             if not track_url:
@@ -244,26 +312,14 @@ class MusicPlayer:
                 return None
             
             print(f"🔍 Extracting full track info for: {track_info.get('title', 'Unknown')}")
-            full_data = await self.safe_extract_info(
-                track_url, 
-                platform, 
-                download=True
-            )
+            full_data = await self.safe_extract_info(track_url, platform, download=True)
             
             if not full_data:
                 print(f"❌ Failed to extract info for: {track_info.get('title', 'Unknown')}")
                 return None
-            
-            audio_url = None
-            if '_filename' in full_data and os.path.exists(full_data['_filename']):
-                audio_url = full_data['_filename']
-                self._downloaded_files.append(audio_url)
-                print(f"✅ Using downloaded file for playback: {audio_url}")
-            else:
-                audio_url = full_data.get('url')
-                if not audio_url and 'entries' in full_data and len(full_data['entries']) > 0:
-                    audio_url = full_data['entries'][0].get('url')
-            
+
+            audio_url = self._resolve_audio_source(full_data, track_url)
+
             if not audio_url:
                 print(f"❌ Could not extract audio URL for: {track_info.get('title', 'Unknown')}")
                 return None
@@ -545,8 +601,6 @@ class Music(commands.Cog):
                         return
 
                     track_title = track_data.get('title', 'Unknown Title')
-                    # Flat YouTube results may contain a stream URL or video
-                    # id in `url`; re-extract the canonical page URL instead.
                     track_url = (
                         track_data.get('webpage_url')
                         or track_data.get('original_url')
@@ -563,12 +617,7 @@ class Music(commands.Cog):
                         download=True
                     )
                     
-                    if full_data and full_data.get('_filename') and os.path.exists(full_data['_filename']):
-                        final_url = full_data['_filename']
-                    elif full_data and 'url' in full_data:
-                        final_url = full_data['url']
-                    else:
-                        final_url = track_url
+                    final_url = player._resolve_audio_source(full_data, track_url)
 
                     player.queue.append({
                         'title': track_title,
@@ -666,18 +715,9 @@ class Music(commands.Cog):
                         await ctx.send("❌ Could not get audio URL for this SoundCloud track.")
                         return
 
-                    full_data = await player.safe_extract_info(
-                        track_url, 
-                        'soundcloud', 
-                        download=True
-                    )
+                    full_data = await player.safe_extract_info(track_url, 'soundcloud', download=True)
                     
-                    if full_data and full_data.get('_filename') and os.path.exists(full_data['_filename']):
-                        final_url = full_data['_filename']
-                    elif full_data and 'url' in full_data:
-                        final_url = full_data['url']
-                    else:
-                        final_url = track_url
+                    final_url = player._resolve_audio_source(full_data, track_url)
 
                     player.queue.append({
                         'title': track_title,
