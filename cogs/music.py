@@ -113,7 +113,7 @@ ytdl_format_options: Dict[str, Any] = {
     'extractor_retries': 3,
 
     # --- JS runtime (Deno) ----------------------------------------------------
-    'js_runtimes': ['deno'],
+    'js_runtimes': {'deno':{}},
 
     # --- Player client strategy ----------------------------------------------
     # NOTE: 'tv_simply' is intentionally excluded because it does not support
