@@ -147,9 +147,7 @@ ytdl_format_options: Dict[str, Any] = {
 # HTTP/HTTPS inputs. Passing them to a local file causes FFmpeg to abort with
 # "Option reconnect not found" and return code 1 (silent playback failure).
 # ---------------------------------------------------------------------------
-ffmpeg_options_local: Dict[str, Any] = {
-    'options': '-vn',
-}
+ffmpeg_options_local: Dict[str, Any] = {}
 
 ffmpeg_options_stream: Dict[str, Any] = {
     'options': '-vn',
