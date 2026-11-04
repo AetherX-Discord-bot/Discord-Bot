@@ -113,10 +113,11 @@ ytdl_format_options: Dict[str, Any] = {
     'extractor_retries': 3,
 
     # --- JS runtime (Deno) ----------------------------------------------------
-    'js_runtimes': {'deno':{}},
+    # Must be a dict of {runtime_name: {config}}, not a list.
+    'js_runtimes': {'deno': {}},
 
     # --- Player client strategy ----------------------------------------------
-    # NOTE: 'tv_simply' is intentionally excluded because it does not support
+    # 'tv_simply' is intentionally excluded because it does not support
     # account cookies. 'tv' works with cookies; 'web_safari' and 'default'
     # act as fallbacks when 'tv' is unavailable.
     'extractor_args': {
@@ -141,10 +142,25 @@ ytdl_format_options: Dict[str, Any] = {
     'skip_unavailable_fragments': True,
 }
 
-ffmpeg_options: Dict[str, Any] = {
+# ---------------------------------------------------------------------------
+# FFmpeg options – protocol options like -reconnect are ONLY valid for
+# HTTP/HTTPS inputs. Passing them to a local file causes FFmpeg to abort with
+# "Option reconnect not found" and return code 1 (silent playback failure).
+# ---------------------------------------------------------------------------
+ffmpeg_options_local: Dict[str, Any] = {
     'options': '-vn',
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
 }
+
+ffmpeg_options_stream: Dict[str, Any] = {
+    'options': '-vn',
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+}
+
+def get_ffmpeg_options(source: str) -> Dict[str, Any]:
+    """Pick the right FFmpeg options based on whether the source is a URL or a local file."""
+    if isinstance(source, str) and source.startswith(('http://', 'https://', 'rtmp://')):
+        return ffmpeg_options_stream
+    return ffmpeg_options_local
 
 audio_cache = {}
 CACHE_DURATION = 3600
@@ -404,9 +420,10 @@ class MusicPlayer:
             
             for attempt in range(2):
                 try:
+                    source_url = self.current['url']
                     source = discord.FFmpegPCMAudio(
-                        self.current['url'],
-                        **ffmpeg_options
+                        source_url,
+                        **get_ffmpeg_options(source_url)
                     )
                     
                     source = discord.PCMVolumeTransformer(source, volume=self.volume)
