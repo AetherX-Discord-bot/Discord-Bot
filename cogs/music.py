@@ -147,7 +147,9 @@ ytdl_format_options: Dict[str, Any] = {
 # HTTP/HTTPS inputs. Passing them to a local file causes FFmpeg to abort with
 # "Option reconnect not found" and return code 1 (silent playback failure).
 # ---------------------------------------------------------------------------
-ffmpeg_options_local: Dict[str, Any] = {}
+ffmpeg_options_local: Dict[str, Any] = {
+    'options': '-vn',
+}
 
 ffmpeg_options_stream: Dict[str, Any] = {
     'options': '-vn',
@@ -424,7 +426,7 @@ class MusicPlayer:
                         **get_ffmpeg_options(source_url)
                     )
                     
-                    source = discord.PCMVolumeTransformer(source, volume=self.volume)
+                    #source = discord.PCMVolumeTransformer(source, volume=self.volume)
                     
                     self.ctx.voice_client.play(
                         source,
