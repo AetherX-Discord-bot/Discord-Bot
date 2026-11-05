@@ -84,9 +84,6 @@ def setup_cookies():
 
 cookie_file = setup_cookies()
 
-# ---------------------------------------------------------------------------
-# Core yt-dlp configuration – tuned for stability with current YouTube
-# ---------------------------------------------------------------------------
 ytdl_format_options: Dict[str, Any] = {
     'format': 'bestaudio/best',
     'outtmpl': os.path.join(DOWNLOAD_FOLDER, '%(extractor)s-%(id)s-%(title)s.%(ext)s'),
@@ -101,7 +98,6 @@ ytdl_format_options: Dict[str, Any] = {
     'cachedir': './yt_dlp_cache',
     'cookiefile': cookie_file if cookie_file else None,
 
-    # --- Stability & bot-detection mitigation ---------------------------------
     'force_ipv4': True,
     'http_headers': {
         'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
@@ -112,21 +108,14 @@ ytdl_format_options: Dict[str, Any] = {
     'socket_timeout': 15,
     'extractor_retries': 3,
 
-    # --- JS runtime (Deno) ----------------------------------------------------
-    # Must be a dict of {runtime_name: {config}}, not a list.
     'js_runtimes': {'deno': {}},
 
-    # --- Player client strategy ----------------------------------------------
-    # 'tv_simply' is intentionally excluded because it does not support
-    # account cookies. 'tv' works with cookies; 'web_safari' and 'default'
-    # act as fallbacks when 'tv' is unavailable.
     'extractor_args': {
         'youtube': {
             'player_client': ['tv', 'web_safari', 'default'],
         },
     },
 
-    # --- Audio extraction -----------------------------------------------------
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
@@ -134,7 +123,6 @@ ytdl_format_options: Dict[str, Any] = {
     }],
     'keepvideo': False,
 
-    # --- Politeness / retries -------------------------------------------------
     'sleep_interval': 1,
     'max_sleep_interval': 2,
     'retries': 3,
@@ -142,11 +130,6 @@ ytdl_format_options: Dict[str, Any] = {
     'skip_unavailable_fragments': True,
 }
 
-# ---------------------------------------------------------------------------
-# FFmpeg options – protocol options like -reconnect are ONLY valid for
-# HTTP/HTTPS inputs. Passing them to a local file causes FFmpeg to abort with
-# "Option reconnect not found" and return code 1 (silent playback failure).
-# ---------------------------------------------------------------------------
 ffmpeg_options_local: Dict[str, Any] = {
     'options': '-vn',
 }
@@ -165,9 +148,7 @@ def get_ffmpeg_options(source: str) -> Dict[str, Any]:
 audio_cache = {}
 CACHE_DURATION = 3600
 
-# Hard cap on a single extraction so a stuck connection can't hang the bot
-# until the VPS is rebooted.
-EXTRACTION_TIMEOUT = 180  # seconds
+EXTRACTION_TIMEOUT = 180
 
 class MusicPlayer:
     def __init__(self, ctx):
@@ -223,13 +204,7 @@ class MusicPlayer:
                     ),
                     timeout=EXTRACTION_TIMEOUT,
                 )
-            
-            # ------------------------------------------------------------------
-            # Resolve the *actual* post-processed file path.
-            # `_filename` often points to the source .webm that the FFmpeg
-            # postprocessor deleted, so prefer `requested_downloads[*].filepath`
-            # and `filepath` first.
-            # ------------------------------------------------------------------
+
             if download and data:
                 downloaded_file = None
 
@@ -306,7 +281,6 @@ class MusicPlayer:
         if fn and os.path.exists(fn):
             return fn
 
-        # Last resort: stream URL (may be short-lived for some platforms)
         url = full_data.get('url')
         if url:
             return url
@@ -421,13 +395,15 @@ class MusicPlayer:
             for attempt in range(2):
                 try:
                     source_url = self.current['url']
-                    source = discord.FFmpegPCMAudio(
+                    ffmpeg_audio = discord.FFmpegPCMAudio(
                         source_url,
                         **get_ffmpeg_options(source_url)
                     )
-                    
-                    #source = discord.PCMVolumeTransformer(source, volume=self.volume)
-                    
+                    source = discord.PCMVolumeTransformer(
+                        ffmpeg_audio,
+                        volume=self.volume
+                    )
+
                     self.ctx.voice_client.play(
                         source,
                         after=lambda e: asyncio.run_coroutine_threadsafe(
