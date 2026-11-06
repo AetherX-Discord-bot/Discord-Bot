@@ -123,11 +123,11 @@ class ChangeBioButton(discord.ui.Button):
         await interaction.response.send_modal(ChangeBioModal(self.user_id))
 
 
-class ChangeColorModal(discord.ui.Modal, title="Change Favorite Color"):
+class ChangeColorModal(discord.ui.Modal):
     new_color = discord.ui.TextInput(label="Enter hex color (e.g. #FF0000)", style=discord.TextStyle.short, max_length=7)
 
     def __init__(self, user_id):
-        super().__init__()
+        super().__init__(title="Change Favorite Color")
         self.user_id = user_id
 
     async def on_submit(self, interaction: discord.Interaction):
